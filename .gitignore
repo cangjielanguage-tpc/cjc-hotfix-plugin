@@ -1,0 +1,9 @@
+.idea
+cmake*
+*.cmake
+Testing
+CMakeFiles
+_deps
+Makefile
+*.so
+CMakeCache*
