@@ -30,7 +30,7 @@ std::optional<std::regex> formRegex(const std::vector<std::string>& filter);
 inline bool matches(const std::string_view name, const std::vector<std::string>& filter)
 {
     const auto pattern = formRegex(filter);
-    return pattern.has_value() ? std::regex_match(name.data(), pattern.value()) : false;
+    return pattern.has_value() && std::regex_match(name.data(), pattern.value());
 }
 }
 #endif //TOMLFILTERGENERATOR_H

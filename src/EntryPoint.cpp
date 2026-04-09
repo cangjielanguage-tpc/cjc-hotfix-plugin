@@ -17,17 +17,19 @@
 #include <set>
 
 using namespace HotfixPlugin;
+using namespace Cangjie;
+using namespace Cangjie::CHIR;
 
-class EntryPoint final : public MetaTransform<CHIR::Package> {
+class EntryPoint final : public MetaTransform<Package> {
 public:
-    explicit EntryPoint(CHIR::CHIRBuilder& b)
+    explicit EntryPoint(CHIRBuilder& b)
         : builder(b),
           pluginContext(сreatePluginContext(builder)),
           tomlFilter(formFilterByTomlDirective())
     {
     }
 
-    void Run(CHIR::Package& package) override
+    void Run(Package& package) override
     {
 #ifdef DEBUG
         std::cout << "Running Hotfix plugin for package " << package.GetName() << std::endl;
@@ -36,20 +38,19 @@ public:
         // and VTable generation. That seems buggy.
         builder.DisableIRCheckerAfterPlugin();
 
-        const auto patcher = Patcher::Create(package.GetName(), builder, pluginContext);
+        auto patcher = Patcher(builder, pluginContext);
         const auto& patchables = findPatchables(package, tomlFilter);
         for (const auto& patchable : patchables) {
 #ifdef DEBUG
-            std::cout << "Found patchable method: " << patchable.funcName.GetQualifiedName() << " " << patchable.
-                funcName.GetPatchClassName() << std::endl;
+            std::cout << "Found patchable method: " << patchable.funcName.getQualifiedName() << std::endl;
 #endif
-            patcher->patch(patchable);
+            patcher.patch(patchable);
         }
 
 #ifdef TEST
-        const auto patcherStub = PatcherStub::Create(package, builder);
+        const auto patcherStub = PatcherStub(package, builder);
         for (const auto& patchable : patchables) {
-            patcherStub->patch(patchable);
+            patcherStub.patch(patchable);
         }
 #endif
 
@@ -60,39 +61,44 @@ public:
     }
 
 private:
-    CHIR::CHIRBuilder& builder;
+    CHIRBuilder& builder;
     std::shared_ptr<PluginContext> pluginContext;
     std::optional<std::regex> tomlFilter;
 
-    static std::shared_ptr<PluginContext> сreatePluginContext(const CHIR::CHIRBuilder& b)
+    static std::shared_ptr<PluginContext> сreatePluginContext(CHIRBuilder& b)
     {
-        CHIR::EnumDef* optionDef = nullptr;
-        CHIR::FuncBase* optionIsNoneDef = nullptr;
-        CHIR::FuncBase* optionGetOrThrowDef = nullptr;
-        for (const auto enumDef : b.GetCurPackage()->GetImportedEnums()) {
-            if (!CHIR::IsCoreOption(*enumDef)) {
-                continue;
+        const auto package = b.GetCurPackage();
+
+        EnumDef* optionDef = nullptr;
+        for (const auto enumDef : package->GetImportedEnums()) {
+            if (IsCoreOption(*enumDef)) {
+                optionDef = enumDef;
+                break;
             }
-            optionDef = enumDef;
-            for (const auto method : enumDef->GetMethods()) {
-                if (auto identifier = method->GetSrcCodeIdentifier(); identifier == "isNone") {
-                    optionIsNoneDef = method;
-                } else if (identifier == "getOrThrow" && method->GetNumOfParams() == 1) {
-                    // considering return type
-                    optionGetOrThrowDef = method;
-                }
-            }
-            break;
         }
         CJC_ASSERT_WITH_MSG(optionDef, "unable to find Option definition");
-        CJC_ASSERT_WITH_MSG(optionIsNoneDef, "unable to find Option.isNone method definition");
-        CJC_ASSERT_WITH_MSG(optionGetOrThrowDef, "unable to find Option.getOrThrow method definition");
 
-        const auto packageInit = b.GetCurPackage()->GetPackageInitFunc();
-        CJC_ASSERT_WITH_MSG(optionDef, "unable to find package init definition");
+        ClassDef* exceptionDef = nullptr;
+        Function* exceptionInitDef = nullptr;
+        for (const auto& importedClass : package->GetImportedClasses()) {
+            if (importedClass->GetSrcCodeIdentifier() == "Exception") {
+                exceptionDef = importedClass;
+                for (const auto& method : importedClass->GetMethods()) {
+                    if (method->IsConstructor() &&
+                        method->GetNumOfParams() == 2 &&
+                        method->GetParam(1)->GetType() == b.GetStringTy()) {
+                        exceptionInitDef = method;
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+        CJC_ASSERT_WITH_MSG(exceptionDef, "unable to find Exception definition");
+        CJC_ASSERT_WITH_MSG(exceptionInitDef, "unable to find Exception.<init>(String) definition");
 
         return std::shared_ptr{
-            std::make_shared<PluginContext>(optionDef, optionIsNoneDef, optionGetOrThrowDef, packageInit)
+            std::make_shared<PluginContext>(optionDef, exceptionDef, exceptionInitDef)
         };
     }
 

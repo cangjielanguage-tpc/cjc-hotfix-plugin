@@ -9,7 +9,7 @@ main() {
 }
 
 @patchable
-class Foo {
+struct Foo {
   func foo(): Unit {
     println("foo")
   }
@@ -22,4 +22,3 @@ class Foo {
     println(res)
   }
 }
-

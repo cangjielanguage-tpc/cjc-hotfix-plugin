@@ -1,4 +1,4 @@
-#include "TypeFilterGenerator.h"
+#include "../src/TypeFilterGenerator.h"
 #include "gtest/gtest.h"
 
 TEST(matches, simple)
