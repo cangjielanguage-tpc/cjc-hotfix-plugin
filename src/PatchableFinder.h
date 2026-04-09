@@ -5,10 +5,10 @@
 #include "PluginContext.h"
 #include <regex>
 
-using namespace Cangjie;
+using namespace Cangjie::CHIR;
 
 namespace HotfixPlugin {
-std::set<Patchable> findPatchables(const CHIR::Package& package, const std::optional<std::regex>& regexpFilter);
+std::set<Patchable> findPatchables(const Package& package, const std::optional<std::regex>& regexpFilter);
 }
 
 #endif //PATCHABLEFINDER_H

@@ -5,55 +5,75 @@
 #include <vector>
 #include <cangjie/Option/OptionTable.h>
 
-using namespace Cangjie;
+using namespace Cangjie::CHIR;
 
 namespace HotfixPlugin {
-void addPatchableFunctions(const PatchableFilter& filter, CHIR::FuncBase* func, std::set<Patchable>& result)
+
+bool matchesRegexpFilter(const std::optional<std::regex>& regexpFilter, const std::string& name)
 {
-    if (const auto funcName = PatchableName{func}; filter(func, funcName.GetQualifiedName())) {
-        result.insert(Patchable{
-            .funcName = funcName,
-            .func = func
-        });
-    }
+    return regexpFilter.has_value() && std::regex_match(name, regexpFilter.value());
 }
 
-void addPatchableMethods(const std::vector<CHIR::ClassDef*>& classDefs, const PatchableFilter& filter,
-    std::set<Patchable>& result)
+bool isPatchable(const AnnoInfo& annoInfo)
 {
-    for (const auto classDef : classDefs) {
-        if (const auto className = PatchableName{classDef}.GetQualifiedName(); filter(classDef, className)) {
-            for (const auto method : classDef->GetMethods()) {
-                const PatchableFilter methodFilter{PatchableFilter::Kind::NONE, std::nullopt};
-                addPatchableFunctions(methodFilter, method, result);
-            }
-        } else {
-            for (const auto method : classDef->GetMethods()) {
-                addPatchableFunctions(filter, method, result);
+    if (annoInfo.IsAvailable()) {
+        for (const auto& pair : annoInfo.annoPairs) {
+            if (pair.annoClassName == "patchable") {
+                return true;
             }
         }
     }
+    return false;
 }
 
-std::set<Patchable> findPatchables(const CHIR::Package& package, const std::optional<std::regex>& regexpFilter)
+bool matches(const AnnoInfo& annoInfo, const std::optional<std::regex>& regexpFilter, const std::string& name)
+{
+    return isPatchable(annoInfo) || matchesRegexpFilter(regexpFilter, name);
+}
+
+std::set<Patchable> findPatchables(const Package& package, const std::optional<std::regex>& regexpFilter)
 {
     std::set<Patchable> result;
-    const auto packageName = package.GetName();
-    // if the canonical name of a Cangjie package matches regex, all functions and classes defined in this package are patchable.
-    if (const PatchableFilter packageFilter{PatchableFilter::Kind::ONLY_REGEXP, regexpFilter}; packageFilter(package)) {
-        const PatchableFilter inPackageFilter{PatchableFilter::Kind::ONLY_REGEXP, std::regex{packageName + "\\..+"}};
-        for (const auto func : package.GetGlobalFuncs()) {
-            addPatchableFunctions(inPackageFilter, func, result);
-        }
-        addPatchableMethods(package.GetAllClassDef(), inPackageFilter, result);
-    }
-    const PatchableFilter funcFilter{PatchableFilter::Kind::ALL, regexpFilter};
-    // if the canonical name of a Cangjie function matches regex, it is patchable
     for (const auto func : package.GetGlobalFuncs()) {
-        addPatchableFunctions(funcFilter, func, result);
+        const auto funcName = PatchableName(func);
+        const auto funcQualifiedName = funcName.getQualifiedName();
+#if DEBUG
+        std::cout << "func: " << func->GetIdentifierWithoutPrefix() << std::endl;
+#endif
+
+        const auto funcIdentifier = func->GetSrcCodeIdentifier();
+        if (const auto funcKind = func->GetFuncKind();
+            func->IsImportedFunc() ||
+
+            func->TestAttr(Attribute::INITIALIZER) ||
+
+            funcKind == ANNOFACTORY_FUNC ||
+            // TODO support constructors later, if needed
+            funcKind == CLASS_CONSTRUCTOR ||
+            funcKind == STRUCT_CONSTRUCTOR ||
+            funcKind == PRIMAL_CLASS_CONSTRUCTOR ||
+            funcKind == PRIMAL_STRUCT_CONSTRUCTOR ||
+
+            funcIdentifier == Cangjie::MAIN_INVOKE ||
+            funcIdentifier == PATCHABLE_GUARD_VARS_INITIALIZER ||
+            funcIdentifier == PACKAGE_INIT_GUARD_METHOD_NAME ||
+            funcIdentifier == PACKAGE_LITERAL_INIT_GUARD_METHOD_NAME) {
+
+            continue;
+        }
+
+        if (const auto declType = func->GetParentCustomTypeDef();
+            matches(func->GetAnnoInfo(), regexpFilter, funcQualifiedName) ||
+            (declType && matches(declType->GetAnnoInfo(), regexpFilter, PatchableName(declType).getQualifiedName()))) {
+#if DEBUG
+            std::cout << "added" << std::endl;
+#endif
+            result.insert(Patchable{
+                .funcName = funcName,
+                .func = func
+            });
+        }
     }
-    // if the canonical name of a Cangjie class matches regex, it is patchable, which means all member functions defined in this class are patchable.
-    addPatchableMethods(package.GetAllClassDef(), funcFilter, result);
     return result;
 }
 }

@@ -25,6 +25,7 @@ add_executable(cjc_hotfix_plugin_test
         TypeFilterGeneratorTest.cpp
 )
 
+target_compile_definitions(cjc_hotfix_plugin_test PRIVATE DEBUG)
 target_link_libraries(cjc_hotfix_plugin_test PRIVATE gtest_main)
 
 enable_testing()

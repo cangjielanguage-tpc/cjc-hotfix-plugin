@@ -32,8 +32,9 @@ set(LIB_SOURCES
         PatchableFinder.cpp
         Patcher.cpp
         TypeFilterGenerator.cpp
-        ../include/PluginContext.h
-        ../include/PatchableFinder.h
+        PluginContext.h
+        Patcher.h
+        PatchableFinder.h
 )
 
 if (CMAKE_BUILD_TYPE STREQUAL "Test")
@@ -48,18 +49,18 @@ if (DEFINED LSP_PATH)
 endif ()
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-    message("Debug build mode")
+    message(STATUS "Debug build mode")
     target_compile_options(cjc_hotfix_plugin PRIVATE
             -O0
     )
     target_compile_definitions(cjc_hotfix_plugin PRIVATE DEBUG)
 elseif (CMAKE_BUILD_TYPE STREQUAL "Release")
-    message("Release build mode")
+    message(STATUS "Release build mode")
     target_compile_options(cjc_hotfix_plugin PRIVATE
             -O2
     )
 elseif (CMAKE_BUILD_TYPE STREQUAL "Test")
-    message("Test build mode")
+    message(STATUS "Test build mode")
     target_compile_options(cjc_hotfix_plugin PRIVATE
             -O0
     )
