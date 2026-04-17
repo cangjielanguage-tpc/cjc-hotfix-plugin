@@ -1,7 +1,3 @@
-cmake_minimum_required(VERSION 3.22)
-
-project(cjc_hotfix_plugin_test)
-
 include(FetchContent)
 FetchContent_Declare(
         googletest
@@ -14,20 +10,19 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(googletest)
 
+include(GoogleTest)
+
 include_directories(
-        ../include
-        ../CHIR_API
-        ${source_dir}/googletest/include
+    ../src
 )
 
-add_executable(cjc_hotfix_plugin_test
-        ../src/TypeFilterGenerator.cpp
-        TypeFilterGeneratorTest.cpp
-)
+file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS "*.cpp")
 
-target_compile_definitions(cjc_hotfix_plugin_test PRIVATE DEBUG)
-target_link_libraries(cjc_hotfix_plugin_test PRIVATE gtest_main)
+add_executable(cjc_hotfix_plugin_test "${TEST_SOURCES}")
 
-enable_testing()
-add_test(NAME cjc_hotfix_plugin_test
-        COMMAND cjc_hotfix_plugin_test)
+target_link_directories(cjc_hotfix_plugin_test PRIVATE "${CANGJIE_PATH}/tools/lib")
+target_link_libraries(cjc_hotfix_plugin_test PRIVATE "cangjie-lsp")
+
+target_link_libraries(cjc_hotfix_plugin_test PRIVATE cjc_hotfix_plugin GTest::gtest_main)
+
+gtest_discover_tests(cjc_hotfix_plugin_test)

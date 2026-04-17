@@ -1,7 +1,5 @@
-gtest
 *_CHIR
 main
-cjc_hotfix_plugin_test
 *.a
 *.cjo
 *.cjo.flag

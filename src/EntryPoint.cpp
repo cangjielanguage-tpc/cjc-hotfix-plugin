@@ -4,8 +4,8 @@
 #include "cangjie/CHIR/Serializer/CHIRSerializer.h"
 #include "PatchableFinder.h"
 #include "Patcher.h"
-#ifdef TEST
-#include "PatcherStub.cpp"
+#ifdef STUB_TEST
+#include "PatcherStub.h"
 #endif
 #include "PluginContext.h"
 #include "TypeFilterGenerator.h"
@@ -47,7 +47,7 @@ public:
             patcher.patch(patchable);
         }
 
-#ifdef TEST
+#ifdef STUB_TEST
         const auto patcherStub = PatcherStub(package, builder);
         for (const auto& patchable : patchables) {
             patcherStub.patch(patchable);
