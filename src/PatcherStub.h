@@ -188,7 +188,7 @@ public:
         const auto baseMethodType = dynamic_cast<FuncType*>(baseMethod.methodTy);
         const auto returnType = baseMethodType->GetReturnType();
         CJC_ASSERT_WITH_MSG(returnType == builder.GetUnitTy(),
-            "unable to build stub for the guard method with return type distinct to Unit")
+            "unable to build stub for the guard method with return type distinct to Unit");
 
         std::vector paramTypes = baseMethodType->GetParamTypes();
         paramTypes.front() = builder.GetType<RefType>(patchClass->GetType());
