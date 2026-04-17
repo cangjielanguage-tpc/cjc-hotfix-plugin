@@ -24,7 +24,7 @@ class EntryPoint final : public MetaTransform<Package> {
 public:
     explicit EntryPoint(CHIRBuilder& b)
         : builder(b),
-          pluginContext(сreatePluginContext(builder)),
+          pluginContext(createPluginContext(builder)),
           tomlFilter(formFilterByTomlDirective())
     {
     }
@@ -65,7 +65,7 @@ private:
     std::shared_ptr<PluginContext> pluginContext;
     std::optional<std::regex> tomlFilter;
 
-    static std::shared_ptr<PluginContext> сreatePluginContext(CHIRBuilder& b)
+    static std::shared_ptr<PluginContext> createPluginContext(CHIRBuilder& b)
     {
         const auto package = b.GetCurPackage();
 
