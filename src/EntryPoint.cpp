@@ -4,8 +4,8 @@
 #include "cangjie/CHIR/Serializer/CHIRSerializer.h"
 #include "PatchableFinder.h"
 #include "Patcher.h"
-#ifdef TEST
-#include "PatcherStub.cpp"
+#ifdef STUB_TEST
+#include "PatcherStub.h"
 #endif
 #include "PluginContext.h"
 #include "TypeFilterGenerator.h"
@@ -24,7 +24,7 @@ class EntryPoint final : public MetaTransform<Package> {
 public:
     explicit EntryPoint(CHIRBuilder& b)
         : builder(b),
-          pluginContext(сreatePluginContext(builder)),
+          pluginContext(createPluginContext(builder)),
           tomlFilter(formFilterByTomlDirective())
     {
     }
@@ -47,7 +47,7 @@ public:
             patcher.patch(patchable);
         }
 
-#ifdef TEST
+#ifdef STUB_TEST
         const auto patcherStub = PatcherStub(package, builder);
         for (const auto& patchable : patchables) {
             patcherStub.patch(patchable);
@@ -65,7 +65,7 @@ private:
     std::shared_ptr<PluginContext> pluginContext;
     std::optional<std::regex> tomlFilter;
 
-    static std::shared_ptr<PluginContext> сreatePluginContext(CHIRBuilder& b)
+    static std::shared_ptr<PluginContext> createPluginContext(CHIRBuilder& b)
     {
         const auto package = b.GetCurPackage();
 
