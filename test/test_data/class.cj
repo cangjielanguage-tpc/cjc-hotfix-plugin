@@ -6,6 +6,7 @@ main() {
   foo.bar(1, Some(10))
   foo.bar(42, Some(42))
   foo.bar(2, None)
+  Foo.baz(3.14)
 }
 
 @patchable
@@ -21,5 +22,8 @@ class Foo {
     }
     println(res)
   }
-}
 
+  static func baz(f: Float64) {
+    println("baz ${f}")
+  }
+}

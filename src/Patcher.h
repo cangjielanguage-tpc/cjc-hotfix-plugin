@@ -24,21 +24,20 @@ private:
 
     ClassDef* genPackageInitGuardClass() const;
 
-    void genPackageInitGuardChecks(const Function* patchable, Type* guardClassType,
-        GlobalVar* guardVar, GlobalVar* guardVarFlag, const Function* guardMethod, Function* guardClassCtor) const;
+    void genPackageInitGuardChecks(const Function* patchable, Type* guardClassType, GlobalVar* guardVar,
+        GlobalVar* guardVarFlag, const Function* guardMethod, Function* guardClassCtor) const;
 
     ClassDef* genGuardClass() const;
 
-    Function* genGuardVarsInitializer(const Package* package) const;
+    Function* genGuardVarsInitializer() const;
 
-    AbstractMethodInfo genGuardMethod(ClassDef* guardClass, const std::string& name, const Function* patchable) const;
+    AbstractMethodInfo genGuardMethod(const std::string& name, const Function* patchable) const;
 
     GlobalVar* genGuardVar(const std::string& name, ClassType* guardClassType, bool needToInstantiate) const;
 
     GlobalVar* genGuardVarFlag(const std::string& name) const;
 
-    void genGuardChecks(const Function* patchable, GlobalVar* guardVarFlag,
-        const AbstractMethodInfo& guardMethod) const;
+    void genGuardChecks(const Function* patchable, GlobalVar* guardVarFlag, const AbstractMethodInfo& guardMethod);
 
     void genShouldNotReachHere(Block* block) const;
 };

@@ -48,11 +48,6 @@ std::set<Patchable> findPatchables(const Package& package, const std::optional<s
             func->TestAttr(Attribute::INITIALIZER) ||
 
             funcKind == ANNOFACTORY_FUNC ||
-            // TODO support constructors later, if needed
-            funcKind == CLASS_CONSTRUCTOR ||
-            funcKind == STRUCT_CONSTRUCTOR ||
-            funcKind == PRIMAL_CLASS_CONSTRUCTOR ||
-            funcKind == PRIMAL_STRUCT_CONSTRUCTOR ||
 
             funcIdentifier == Cangjie::MAIN_INVOKE ||
             funcIdentifier == PATCHABLE_GUARD_VARS_INITIALIZER ||
@@ -65,13 +60,13 @@ std::set<Patchable> findPatchables(const Package& package, const std::optional<s
         if (const auto declType = func->GetParentCustomTypeDef();
             matches(func->GetAnnoInfo(), regexpFilter, funcQualifiedName) ||
             (declType && matches(declType->GetAnnoInfo(), regexpFilter, PatchableName(declType).getQualifiedName()))) {
-#if DEBUG
-            std::cout << "added" << std::endl;
-#endif
-            result.insert(Patchable{
+            const auto [_, added] = result.insert(Patchable{
                 .funcName = funcName,
                 .func = func
             });
+#if DEBUG
+            std::cout << "added " << added << std::endl;
+#endif
         }
     }
     return result;

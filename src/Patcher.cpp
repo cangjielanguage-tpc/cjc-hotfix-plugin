@@ -15,24 +15,26 @@ Patcher::Patcher(CHIRBuilder& builder, const std::shared_ptr<PluginContext>& plu
       package(builder.GetCurPackage()),
       pluginCtx(pluginCtx)
 {
-    const auto gClass = genPackageInitGuardClass();
-    const auto gVar = genGuardVar(PACKAGE_INIT_GUARD_VAR_NAME, gClass->GetType(), false);
-    gVar->SetInitFunc(*package->GetPackageInitFunc());
-    const auto gVarFlag = genGuardVarFlag(PACKAGE_INIT_GUARD_VAR_FLAG_NAME);
-    const auto gClassMethods = gClass->GetMethods();
-    CJC_ASSERT_WITH_MSG(gClassMethods.size() == 3, "expected package init guard class to have 3 methods");
-    CJC_ASSERT_WITH_MSG(gClassMethods.back()->GetFuncKind() == CLASS_CONSTRUCTOR,
+    const auto guardClass = genPackageInitGuardClass();
+    const auto guardClassType = guardClass->GetType();
+    const auto guardVar = genGuardVar(PACKAGE_INIT_GUARD_VAR_NAME, guardClassType, false);
+    guardVar->SetInitFunc(*package->GetPackageInitFunc());
+    const auto guardVarFlag = genGuardVarFlag(PACKAGE_INIT_GUARD_VAR_FLAG_NAME);
+    const auto guardClassMethods = guardClass->GetMethods();
+    CJC_ASSERT_WITH_MSG(guardClassMethods.size() == 3, "expected package init guard class to have 3 methods");
+    const auto guardClassCtor = guardClassMethods.back();
+    CJC_ASSERT_WITH_MSG(guardClassCtor->GetFuncKind() == CLASS_CONSTRUCTOR,
         "expected package init guard class to have ctor");
-    genPackageInitGuardChecks(package->GetPackageInitFunc(), gClass->GetType(), gVar, gVarFlag,
-        gClassMethods.front(), gClassMethods.back());
-    genPackageInitGuardChecks(package->GetPackageLiteralInitFunc(), gClass->GetType(), gVar, gVarFlag,
-        gClassMethods.at(1), gClassMethods.back());
+    genPackageInitGuardChecks(package->GetPackageInitFunc(), guardClassType, guardVar, guardVarFlag,
+        guardClassMethods.front(), guardClassCtor);
+    genPackageInitGuardChecks(package->GetPackageLiteralInitFunc(), guardClassType, guardVar, guardVarFlag,
+        guardClassMethods.at(1), guardClassCtor);
 }
 
 void Patcher::patch(const Patchable& patchable)
 {
     if (!guardVarsInitializer) {
-        guardVarsInitializer = genGuardVarsInitializer(builder.GetCurPackage());
+        guardVarsInitializer = genGuardVarsInitializer();
         guardClass = genGuardClass();
         guardVar = genGuardVar(PATCHABLE_GUARD_VAR_NAME, guardClass->GetType(), true);
         guardVar->SetInitFunc(*guardVarsInitializer);
@@ -40,7 +42,8 @@ void Patcher::patch(const Patchable& patchable)
     CJC_ASSERT_WITH_MSG(guardVarsInitializer && guardClass && guardVar,
         "guard var, guard class or guard vars initializer is expected to be generated");
     const auto guardVarFlag = genGuardVarFlag(patchable.funcName.getGuardVarFlagName());
-    const auto guardMethod = genGuardMethod(guardClass, patchable.funcName.getGuardMethodName(), patchable.func);
+    const auto guardMethod = genGuardMethod(
+        guardClass->GetSrcCodeIdentifier() + patchable.funcName.getGuardMethodName(), patchable.func);
     genGuardChecks(patchable.func, guardVarFlag, guardMethod);
 }
 
@@ -409,7 +412,7 @@ ClassDef* Patcher::genGuardClass() const
       Exit()
   }
  */
-Function* Patcher::genGuardVarsInitializer(const Package* package) const
+Function* Patcher::genGuardVarsInitializer() const
 {
     std::vector<Type*> paramTypes;
     const auto funcType = builder.GetType<FuncType>(paramTypes, builder.GetUnitTy());
@@ -457,30 +460,56 @@ Function* Patcher::genGuardVarsInitializer(const Package* package) const
      ...
    }
 
+   class C {
+     func bar() {
+       ...
+     }
+
+     static func baz() {
+       ...
+     }
+   }
+
+   struct S {
+     init() {
+       ...
+     }
+   }
+
    CHIR pseudocode:
 
-  [abstract] class @$Patch <: @_CNat6ObjectE {
-    [protected] [abstract] func $fooPatch: (Class-$Patch&) -> Unit
+  [abstract] class $Patch <: Object {
+    [protected] [abstract] func $fooPatch: ($Patch&) -> Unit
+    [protected] [abstract] func $cBarPatch: ($Patch&, C&) -> Unit
+    [protected] [abstract] func $cBazPatch: ($Patch&) -> Unit
+    [protected] [abstract] func $sInitPatch: ($Patch&) -> S
   }
  */
-AbstractMethodInfo Patcher::genGuardMethod(ClassDef* guardClass, const std::string& name,
-    const Function* patchable) const
+AbstractMethodInfo Patcher::genGuardMethod(const std::string& name, const Function* patchable) const
 {
 #ifdef DEBUG
     std::cout << "gen guard method for patchable func:" << std::endl;
     std::cout << patchable->ToString() << std::endl;
 #endif
 
-    std::vector<Type*> methodParamTypes;
-    if (!patchable->TestAttr(Attribute::STATIC)) {
-        methodParamTypes.emplace_back(builder.GetType<RefType>(guardClass->GetType()));
+    auto patchableMethodType = static_cast<FuncType*>(patchable->GetType());
+    if (const auto patchableKind = patchable->GetFuncKind();
+        patchableKind == STRUCT_CONSTRUCTOR || patchableKind == PRIMAL_STRUCT_CONSTRUCTOR) {
+        auto paramTypes = patchableMethodType->GetParamTypes();
+        auto returnType = paramTypes.front();
+        CJC_ASSERT_WITH_MSG(returnType->IsRef(), "expected ctor this param to be a ref type");
+        paramTypes.erase(paramTypes.begin());
+        returnType = static_cast<RefType*>(returnType)->GetBaseType();
+        patchableMethodType = builder.GetType<FuncType>(paramTypes, returnType);
     }
-    std::vector<AbstractMethodParam> methodParams;
-    const auto patchableMethodType = static_cast<FuncType*>(patchable->GetType());
+
     const auto paramTypes = patchableMethodType->GetParamTypes();
+    std::vector<Type*> methodParamTypes{builder.GetType<RefType>(guardClass->GetType())};
+    std::vector<AbstractMethodParam> methodParams;
     for (size_t i = 0; i < paramTypes.size(); ++i) {
-        methodParams.emplace_back(AbstractMethodParam{"p" + std::to_string(i), paramTypes.at(i)});
-        methodParamTypes.emplace_back(paramTypes.at(i));
+        auto paramType = paramTypes.at(i);
+        methodParams.emplace_back(AbstractMethodParam{"p" + std::to_string(i), paramType});
+        methodParamTypes.emplace_back(paramType);
     }
 
     const auto methodType = builder.GetType<FuncType>(methodParamTypes, patchableMethodType->GetReturnType());
@@ -579,6 +608,8 @@ GlobalVar* Patcher::genGuardVarFlag(const std::string& name) const
 }
 
 /*
+  Example 1:
+
   CJ source code:
 
   @patchable
@@ -634,14 +665,95 @@ GlobalVar* Patcher::genGuardVarFlag(const std::string& name) const
       RaiseException(%12)
   }
 
+  Example 2:
+
+  CJ source code:
+
+  struct S {
+    let a: Int64
+
+    @patchable
+    init(a: Int64) {
+      this.a = a
+    }
+  }
+
+  CHIR pseudocode before:
+
+  Func @_CN7default3Foo6<init>Hl(%0: Struct-_CN7default3FooE&, %1: Int64) { // kind structConstructor
+    Block #0:
+      %2: Unit = Debug(%0, this)
+      %3: Unit = Debug(%1, a)
+      [ret] %4: Unit& = Allocate(Unit)
+    Block #2:
+      %5: Unit = StoreElementByName(%1, %0, a)
+      %6: Unit = Constant(unit)
+      %7: Unit = Store(%6, %4)
+      Exit()
+  }
+
+  CHIR pseudocode after:
+
+  $patchVar: Enum-_CNat6OptionIG_E<Class-$Patch&>& = None
+  $fooInit_Foo_Int64_PatchVarFlag: Bool& = false
+
+  [abstract] class $Patch <: Object {
+    ...
+    [protected] [abstract] $Patch$fooInit_Foo_Int64_Patch: (Class-$Patch&, Int64) -> Struct-_CN7default3FooE
+    ...
+  }
+
+  Func @$fooInit_Foo_Int64_Patch(%0: Foo&, %1: Int64, %2: Enum-_CNat6OptionIG_E<Class-$Patch&>) : Unit { // kind: structConstructor
+    Block #0:
+      [ret] %3: Unit& = Allocate(Unit)
+      %4: Tuple(Bool,Class-$Patch&) = TypeCast(%2)
+      [readOnly] %5: Class-$Patch& = Field(%4, 1)
+      %6: Struct-_CN7default3FooE = Invoke(ThisType: Class-$Patch&, $Patch$fooInit_Foo_Int64_Patch: (Class-$Patch&, Int64) -> Struct-_CN7default3FooE, %5, %1)
+      %7: Int64 = FieldByName(%6, a)
+      %8: Unit = StoreElementByName(%7, %0, a)
+      %9: Unit = Constant(unit)
+      %10: Unit = Store(%9, %3)
+      Exit()
+  }
+
+  Func @_CN7default3Foo6<init>Hl(%0: Struct-_CN7default3FooE&, %1: Int64) { // kind structConstructor
+    Block #0:
+      %2: Unit = Debug(%0, this)
+      %3: Unit = Debug(%1, a)
+      [ret] %4: Unit& = Allocate(Unit)
+      %5: Bool = Load(@$fooInit_Foo_Int64_PatchVarFlag)
+      %6: Bool = Not(%5)
+      Branch(%6, #1, #3)
+    Block #1:
+      GoTo(#2)
+    Block #2:
+      %7: Unit = StoreElementByName(%1, %0, a)
+      %8: Unit = Constant(unit)
+      %9: Unit = Store(%8, %4)
+      Exit()
+    Block #3:
+      %10: Enum-_CNat6OptionIG_E<Class-$Patch&> = Load(@$patchVar)
+      %11: Bool = Field(%10, 0)
+      %12: Bool = Constant(false)
+      %13: Bool = Equal(%11, %12)
+      Branch(%13, #4, #5)
+    Block #4:
+      %14: Unit = Apply(ThisType: Struct-_CN7default3FooE&, @$fooInit_Foo_Int64_Patch, %0, %1, %10)
+      Exit()
+    Block #5:
+      %15: Struct-_CNat6StringE = Constant("should not reach here")
+      %16: Class-_CNat9ExceptionE& = Allocate(Class-_CNat9ExceptionE)
+      %17: Unit = Apply(ThisType: Class-_CNat9ExceptionE&, @_CNat9Exception6<init>HRNat6StringE, %16, %15)
+      RaiseException(%16)
+  }
  */
-void Patcher::genGuardChecks(const Function* patchable, GlobalVar* guardVarFlag,
-    const AbstractMethodInfo& guardMethod) const
+void Patcher::genGuardChecks(const Function* const patchable, GlobalVar* guardVarFlag,
+    const AbstractMethodInfo& guardMethod)
 {
 #ifdef DEBUG
     std::cout << "Gen guard check" << std::endl;
 #endif
-    const auto bg = patchable->GetBody();
+    auto patchableBody = patchable->GetBody();
     auto entryBlock = patchable->GetEntryBlock();
     auto successors = entryBlock->GetSuccessors();
     CJC_ASSERT_WITH_MSG(successors.size() == 1, "entry block is expected to have one successor");
@@ -664,8 +776,9 @@ void Patcher::genGuardChecks(const Function* patchable, GlobalVar* guardVarFlag,
     const auto guardVarBaseType = static_cast<RefType*>(guardVarType)->GetBaseType();
     const auto loadGuardVar = CHIR::CreateAndAppendExpression<Load>(builder, guardVarBaseType, guardVar,
         guardVarCheckBlock);
+    Value* guardVarResult = loadGuardVar->GetResult();
 
-    const auto field = CHIR::CreateAndAppendExpression<Field>(builder, builder.GetBoolTy(), loadGuardVar->GetResult(),
+    const auto field = CHIR::CreateAndAppendExpression<Field>(builder, builder.GetBoolTy(), guardVarResult,
         std::vector<uint64_t>{0}, guardVarCheckBlock);
 
     const auto falseConst = builder.CreateConstantExpression<BoolLiteral>(builder.GetBoolTy(), guardVarCheckBlock,
@@ -675,24 +788,103 @@ void Patcher::genGuardChecks(const Function* patchable, GlobalVar* guardVarFlag,
     const auto guardVarCheckCond = CHIR::CreateAndAppendExpression<BinaryExpression>(builder, builder.GetBoolTy(),
         CHIR::ExprKind::EQUAL, field->GetResult(), falseConst->GetResult(), guardVarCheckBlock);
 
-    const auto callPatchBlock = builder.CreateBlock(entryBlock->GetParentBlockGroup());
+    auto callPatchBlock = builder.CreateBlock(entryBlock->GetParentBlockGroup());
 
     const auto shouldNotReachHereBlock = builder.CreateBlock(entryBlock->GetParentBlockGroup());
     genShouldNotReachHere(shouldNotReachHereBlock);
     CHIR::CreateAndAppendTerminator<Branch>(builder, guardVarCheckCond->GetResult(), callPatchBlock,
         shouldNotReachHereBlock, guardVarCheckBlock);
 
+    const auto patchableKind = patchable->GetFuncKind();
+    const auto isStructCtor = patchableKind == STRUCT_CONSTRUCTOR || patchableKind == PRIMAL_STRUCT_CONSTRUCTOR;
+
+    const Function* modifiedPatchable = patchable;
+    if (modifiedPatchable->IsConstructor()) {
+        std::vector<Type*> paramTypes;
+        for (const auto param : modifiedPatchable->GetParams()) {
+            paramTypes.emplace_back(param->GetType());
+        }
+        paramTypes.emplace_back(guardVarResult->GetType());
+
+        const auto ctorType = builder.GetType<FuncType>(paramTypes, builder.GetUnitTy());
+
+        const auto methodName = PatchableName(modifiedPatchable).getGuardMethodName();
+
+        const auto ctor = builder.CreateFuncWithBody(INVALID_LOCATION, ctorType, methodName,
+            "init", methodName, package->GetName(), {});
+        ctor->SetFuncKind(modifiedPatchable->GetFuncKind());
+        ctor->EnableAttr(Attribute::COMPILER_ADD);
+        ctor->EnableAttr(Attribute::PRIVATE);
+        if (!isStructCtor) {
+            // SKIP_ANALYSIS attribute disables different static checks,
+            // e.g. that every instance field is initialized (see Cangjie::CHIR::VarInitCheck) in constructor,
+            // i.e. for every instance field there should be a corresponding Store node right in constructor.
+
+            // If instance type is a class, we are able to pass a class reference as a method parameter (e.g. in constructor),
+            // so we create a guard method with class reference parameter and call it.
+            // It's patch implementation will initialize all the fields via this class reference,
+            // so we don't need to generated explicit Store nodes right in constructor after guard method call.
+
+            // If instance type is a struct, we are NOT able to pass a struct reference as a method parameter,
+            // so we can only return it by value from the method and generate all the Store nodes explicitly right after guard method call.
+            ctor->EnableAttr(Attribute::SKIP_ANALYSIS);
+        }
+
+        for (const auto paramType : paramTypes) {
+            builder.CreateParameter(paramType, INVALID_LOCATION, *ctor);
+        }
+
+        const auto ctorBody = builder.CreateBlockGroup(*ctor);
+        ctor->InitBody(*ctorBody);
+        const auto ctorBlock = builder.CreateBlock(ctorBody);
+        ctorBody->SetEntryBlock(ctorBlock);
+
+        const auto retVal = CHIR::CreateAndAppendExpression<Allocate>(builder, INVALID_LOCATION,
+            builder.GetType<RefType>(builder.GetUnitTy()), builder.GetUnitTy(), ctorBlock)->GetResult();
+        ctor->SetReturnValue(*retVal);
+
+        patchable->GetParentCustomTypeDef()->AddMethod(ctor);
+
+        std::vector<Value*> params;
+        for (const auto param : GetFuncParams(*patchable->GetBody())) {
+            params.emplace_back(param);
+        }
+        params.emplace_back(guardVarResult);
+
+        CHIR::CreateAndAppendExpression<Apply>(builder, builder.GetUnitTy(),
+            ctor, FuncCallContext{
+                .args = params,
+                .instTypeArgs = {},
+                .thisType = params.front()->GetType(),
+            }, callPatchBlock);
+
+        modifiedPatchable = ctor;
+        patchableBody = ctorBody;
+        guardVarResult = GetFuncParams(*ctorBody).back();
+        CHIR::CreateAndAppendTerminator<Exit>(builder, callPatchBlock);
+        callPatchBlock = ctorBlock;
+    }
+
     const std::vector<Type*> optionTypeArgs{builder.GetBoolTy(), guardVarBaseType->GetTypeArgs().front()};
     const auto optionType = builder.GetType<TupleType>(optionTypeArgs);
-    const auto typeCast = CHIR::CreateAndAppendExpression<TypeCast>(builder, optionType, loadGuardVar->GetResult(),
+    const auto typeCast = CHIR::CreateAndAppendExpression<TypeCast>(builder, optionType, guardVarResult,
         callPatchBlock);
 
     const auto caller = CHIR::CreateAndAppendExpression<Field>(builder, guardVarBaseType->GetTypeArgs().front(),
         typeCast->GetResult(), std::vector<uint64_t>{1}, callPatchBlock);
     caller->GetResult()->EnableAttr(Attribute::READONLY);
 
-    const auto funcType = dynamic_cast<FuncType*>(guardMethod.methodTy);
-    const auto funcParameters = GetFuncParams(*bg);
+    auto funcType = dynamic_cast<FuncType*>(guardMethod.methodTy);
+    auto funcParameters = GetFuncParams(*patchableBody);
+    if (modifiedPatchable->IsConstructor()) {
+        // remove patch var from arguments
+        funcParameters.pop_back();
+        if (isStructCtor) {
+            // remove this parameter from arguments
+            funcParameters.erase(funcParameters.begin());
+        }
+    }
+
     const auto callContext =
         InvokeCallContext{
             .caller = caller->GetResult(),
@@ -710,21 +902,39 @@ void Patcher::genGuardChecks(const Function* patchable, GlobalVar* guardVarFlag,
     const auto callMethod = CHIR::CreateAndAppendExpression<Invoke>(builder, funcType->GetReturnType(), callContext,
         callPatchBlock);
 
-    if (const auto resultType = callMethod->GetResultType()) {
-        if (resultType->IsUnit()) {
-            const auto unitConst = builder.CreateConstantExpression<UnitLiteral>(builder.GetUnitTy(), callPatchBlock);
-            unitConst->MoveAfter(callMethod);
-            CHIR::CreateAndAppendExpression<Store>(builder, builder.GetUnitTy(), unitConst->GetResult(),
-                patchable->GetReturnValue(), callPatchBlock);
-        } else {
-            CHIR::CreateAndAppendExpression<Store>(builder, builder.GetUnitTy(), callMethod->GetResult(),
-                patchable->GetReturnValue(), callPatchBlock);
+    const auto resultType = callMethod->GetResultType();
+
+    if (isStructCtor) {
+        CJC_ASSERT_WITH_MSG(resultType->IsStruct(), "expected result type to be a struct");
+        const auto instanceVars = static_cast<StructType*>(resultType)->GetStructDef()->GetAllInstanceVars();
+        for (const auto& instanceVar : instanceVars) {
+            std::vector varName{instanceVar.name};
+            const auto varValue = CHIR::CreateAndAppendExpression<FieldByName>(builder, instanceVar.type,
+                callMethod->GetResult(), varName, callPatchBlock);
+            CHIR::CreateAndAppendExpression<StoreElementByName>(builder, builder.GetUnitTy(), varValue->GetResult(),
+                GetFuncParams(*patchableBody).front(), varName, callPatchBlock);
         }
+    }
+
+    if (resultType->IsUnit() || isStructCtor) {
+        const auto unitConst = builder.CreateConstantExpression<UnitLiteral>(builder.GetUnitTy(),
+            callPatchBlock);
+        const auto store = CHIR::CreateAndAppendExpression<Store>(builder, builder.GetUnitTy(), unitConst->GetResult(),
+            modifiedPatchable->GetReturnValue(), callPatchBlock);
+        unitConst->MoveBefore(store);
+    } else {
+        CHIR::CreateAndAppendExpression<Store>(builder, builder.GetUnitTy(), callMethod->GetResult(),
+            modifiedPatchable->GetReturnValue(), callPatchBlock);
     }
 
     CHIR::CreateAndAppendTerminator<Exit>(builder, callPatchBlock);
 
 #ifdef DEBUG
+    if (modifiedPatchable->IsConstructor()) {
+        std::cout << "new ctor:" << std::endl;
+        std::cout << modifiedPatchable->ToString() << std::endl;
+    }
+    std::cout << "updated patchable:" << std::endl;
     std::cout << patchable->ToString() << std::endl;
 #endif
 }
