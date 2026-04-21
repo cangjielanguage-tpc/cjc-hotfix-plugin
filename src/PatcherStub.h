@@ -1,5 +1,11 @@
+#ifndef PATCHERSTUB_H
+#define PATCHERSTUB_H
 #include "PluginContext.h"
 #include "cangjie/CHIR/Utils/Utils.h"
+#include "cangjie/CHIR/Serializer/CHIRDeserializer.h"
+
+#include <filesystem>
+#include <fstream>
 
 using namespace Cangjie;
 using namespace Cangjie::CHIR;
@@ -11,6 +17,10 @@ public:
         : package(package),
           builder(builder)
     {
+#if DEBUG
+        std::cout << std::endl << std::endl << std::endl;
+#endif
+
         printlnStringFunc = findPrintlnFunc();
         // just a hack for specific test
         if (package.GetName() == "package_init") {
@@ -19,6 +29,41 @@ public:
         guardClass = findGuardClass(PATCHABLE_GUARD_CLASS_NAME);
         patchClass = genPatchClass(guardClass);
         guardVarsInitializer = prepareGuardVarsInitializer();
+
+        const auto testFileName = builder.GetChirContext().GetSourceFileName(1);
+        if (!testFileName.rfind(".cj")) {
+            return;
+        }
+
+        if (std::ifstream stubMapFile(testFileName + ".stub.map"); stubMapFile.is_open()) {
+#if DEBUG
+            std::cout << "found patched stub map file" << std::endl;
+#endif
+            std::string line;
+            while (std::getline(stubMapFile, line)) {
+                if (const auto delimiterPos = line.find('='); delimiterPos != std::string::npos) {
+                    const auto key = line.substr(0, delimiterPos);
+                    const auto value = line.substr(delimiterPos + 1);
+                    stubsMap[key] = value;
+                }
+            }
+            stubMapFile.close();
+        }
+
+        if (stubsMap.empty()) {
+#if DEBUG
+            std::cout << "stub map file is empty" << std::endl;
+#endif
+            return;
+        }
+
+        for (auto& [_, stubName] : stubsMap) {
+            for (auto func : package.GetGlobalFuncs()) {
+                if (const auto name = func->GetIdentifierWithoutPrefix(); name == stubName) {
+                    stubCode.emplace(name, func->GetBody());
+                }
+            }
+        }
     }
 
     void preparePackageInits() const
@@ -168,7 +213,8 @@ public:
 
     void patch(const Patchable& patchable) const
     {
-        const auto guardMethod = findGuardMethod(patchable.funcName.getGuardMethodName());
+        const auto guardMethod = findGuardMethod(
+            guardClass->GetSrcCodeIdentifier() + patchable.funcName.getGuardMethodName());
         genPatchMethodStub(guardMethod);
         updateGuardVarsInitializer(patchable);
     }
@@ -187,8 +233,6 @@ public:
     {
         const auto baseMethodType = dynamic_cast<FuncType*>(baseMethod.methodTy);
         const auto returnType = baseMethodType->GetReturnType();
-        CJC_ASSERT_WITH_MSG(returnType == builder.GetUnitTy(),
-            "unable to build stub for the guard method with return type distinct to Unit");
 
         std::vector paramTypes = baseMethodType->GetParamTypes();
         paramTypes.front() = builder.GetType<RefType>(patchClass->GetType());
@@ -208,26 +252,137 @@ public:
         const auto body = builder.CreateBlock(bg);
         bg->SetEntryBlock(body);
 
-        const auto retVal = builder.CreateExpression<Allocate>(INVALID_LOCATION,
-            builder.GetType<RefType>(builder.GetUnitTy()), builder.GetUnitTy(),
-            body)->GetResult();
-        overriddenMethod->SetReturnValue(*retVal);
+        if (const auto patchStub = stubsMap.find(baseMethod.methodName); patchStub == stubsMap.end()) {
+#if DEBUG
+            std::cout << "stub method for " << baseMethod.methodName << " was not found in stub map" << std::endl;
+#endif
 
-        const auto terminator = builder.CreateTerminator<Exit>(body);
-        body->AppendExpression(terminator);
+            /*
+               generate default stub for method with Unit return type:
 
-        const auto helloLiteral = builder.CreateConstantExpression<StringLiteral>(builder.GetStringTy(), body,
-            "Hello from stub");
-        helloLiteral->MoveBefore(terminator);
+               func foo(): Unit {
+                 println("Hello from stub")
+               }
+             */
+            CJC_ASSERT_WITH_MSG(returnType == builder.GetUnitTy(),
+                "unable to build stub for the guard method with return type distinct to Unit");
 
-        const auto applyPrintln = builder.CreateExpression<Apply>(builder.GetUnitTy(), printlnStringFunc,
-            FuncCallContext{
-                .args = {helloLiteral->GetResult()},
-                .instTypeArgs = {},
-                .thisType = nullptr,
-            }, body);
-        applyPrintln->MoveAfter(helloLiteral);
+            const auto retVal = builder.CreateExpression<Allocate>(INVALID_LOCATION,
+                builder.GetType<RefType>(builder.GetUnitTy()), builder.GetUnitTy(),
+                body)->GetResult();
+            overriddenMethod->SetReturnValue(*retVal);
 
+            const auto terminator = builder.CreateTerminator<Exit>(body);
+            body->AppendExpression(terminator);
+
+            const auto helloLiteral = builder.CreateConstantExpression<StringLiteral>(builder.GetStringTy(), body,
+                "Hello from stub");
+            helloLiteral->MoveBefore(terminator);
+
+            const auto applyPrintln = builder.CreateExpression<Apply>(builder.GetUnitTy(), printlnStringFunc,
+                FuncCallContext{
+                    .args = {helloLiteral->GetResult()},
+                    .instTypeArgs = {},
+                    .thisType = nullptr,
+                }, body);
+            applyPrintln->MoveAfter(helloLiteral);
+
+        } else {
+            // generate stub according to stub.map file
+#if DEBUG
+            std::cout << "search stub code for " << baseMethod.methodName << ": " << patchStub->second << std::endl;
+#endif
+            if (const auto patchStubCode = stubCode.find(patchStub->second); patchStubCode == stubCode.end()) {
+#if DEBUG
+                std::cout << "candidates: " << std::endl;
+                for (const auto func : package.GetGlobalFuncs()) {
+                    if (func->GetPackageName() == package.GetName()) {
+                        std::cout << func->GetIdentifierWithoutPrefix() << std::endl;
+                    }
+                }
+#endif
+                CJC_ABORT_WITH_MSG("not found");
+            } else {
+#if DEBUG
+                std::cout << "found:" << std::endl;
+#endif
+
+                const auto stubMethod = patchStubCode->second->GetOwnerFunc();
+#if DEBUG
+                std::cout << stubMethod->ToString() << std::endl;
+#endif
+
+                const auto currRetVal = stubMethod->GetReturnValue();
+                int retValIdx = -1;
+                int exprIdx = -1;
+                for (const auto expr : stubMethod->GetEntryBlock()->GetNonTerminatorExpressions()) {
+                    exprIdx++;
+                    if (expr->GetResult() == currRetVal) {
+                        retValIdx = exprIdx;
+                        break;
+                    }
+                }
+
+                std::vector<Parameter*> newParams;
+                for (auto param : overriddenMethod->GetParams()) {
+                    newParams.emplace_back(param);
+                }
+                overriddenMethod->ReplaceBody(*patchStubCode->second);
+                for (const auto param : newParams) {
+                    overriddenMethod->AddParam(*param);
+                }
+                // as a function has a new body, we need to fix param refs
+                const auto parameters = GetFuncParams(*overriddenMethod->GetBody());
+                const auto fixParamsRef = [&](Expression& e) {
+                    for (const auto operand : e.GetOperands()) {
+                        if (operand->IsParameter()) {
+                            for (const auto param : parameters) {
+                                if (param->GetIdentifier() == operand->GetIdentifier()) {
+                                    e.ReplaceOperand(operand, param);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    return VisitResult::CONTINUE;
+                };
+                Visitor::Visit(*overriddenMethod, [](Expression&) {
+                    return VisitResult::CONTINUE;
+                }, fixParamsRef);
+
+                if (const auto declClass = stubMethod->GetParentCustomTypeDef()) {
+                    std::vector<Function*> newMethods;
+                    for (auto method : declClass->GetMethods()) {
+                        if (method->GetIdentifierWithoutPrefix() != stubMethod->GetIdentifierWithoutPrefix()) {
+                            newMethods.emplace_back(method);
+                        }
+                    }
+                    declClass->SetMethods(newMethods);
+                }
+                std::vector<Function*> newGlobalFuncs;
+                for (auto func : package.GetGlobalFuncs()) {
+                    if (func->GetIdentifierWithoutPrefix() != stubMethod->GetIdentifierWithoutPrefix()) {
+                        newGlobalFuncs.emplace_back(func);
+                    }
+                }
+                package.SetGlobalFuncs(newGlobalFuncs);
+
+                // regenerate expressions in block to fix identifiers
+                for (const auto block : overriddenMethod->GetBody()->GetBlocks()) {
+                    for (const auto expression : block->GetNonTerminatorExpressions()) {
+                        const auto clonedExpr = expression->Clone(builder, *overriddenMethod->GetEntryBlock());
+                        expression->ReplaceWith(*clonedExpr);
+                    }
+                }
+
+                const auto newRetVal = overriddenMethod->GetEntryBlock()->GetExpressions().at(retValIdx)->GetResult();
+                overriddenMethod->SetReturnValue(*newRetVal);
+            }
+        }
+#if DEBUG
+        std::cout << "patch after replacement:" << std::endl;
+        std::cout << overriddenMethod->ToString() << std::endl;
+#endif
         patchClass->AddMethod(overriddenMethod);
     }
 
@@ -264,5 +419,11 @@ private:
     ClassDef* patchClass = nullptr;
     Function* guardVarsInitializer = nullptr;
     Function* printlnStringFunc = nullptr;
+
+    std::unordered_map<std::string, std::string> stubsMap;
+    std::unordered_map<std::string, BlockGroup*> stubCode;
 };
 }
+
+
+#endif // PATCHERSTUB_H

@@ -34,7 +34,7 @@ public:
 #ifdef DEBUG
         std::cout << "Running Hotfix plugin for package " << package.GetName() << std::endl;
 #endif
-        // IR checks are disabled as compiler tries to check abstract methods offsets before Canonicalization
+        // IR checks are disabled in release mode as compiler tries to check abstract methods offsets before Canonicalization
         // and VTable generation. That seems buggy.
         builder.DisableIRCheckerAfterPlugin();
 
@@ -42,7 +42,9 @@ public:
         const auto& patchables = findPatchables(package, tomlFilter);
         for (const auto& patchable : patchables) {
 #ifdef DEBUG
-            std::cout << "Found patchable method: " << patchable.funcName.getQualifiedName() << std::endl;
+            std::cout << std::endl << std::endl << std::endl << "Found patchable method: " <<
+                patchable.funcName.getQualifiedName() << "(" << patchable.func->GetIdentifierWithoutPrefix() << ")"
+                << std::endl;
 #endif
             patcher.patch(patchable);
         }
@@ -55,8 +57,8 @@ public:
 #endif
 
 #ifdef DEBUG
-        CHIR::CHIRSerializer::Serialize(package, "plugin" + package.GetName() + ".chir", CHIR::ToCHIR::RAW);
-        std::cout << "Finished running Hotfix plugin" << std::endl;
+        CHIRSerializer::Serialize(package, "plugin" + package.GetName() + ".chir", ToCHIR::RAW);
+        std::cout << "Finished running Hotfix plugin" << std::endl << std::endl << std::endl;
 #endif
     }
 

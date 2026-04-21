@@ -28,7 +28,7 @@ class PatchableName final {
 public:
     explicit PatchableName(const CustomTypeDef* typeDef)
         : PatchableName(
-            std::move(typeDef->GetPackageName()), std::move(typeDef->GetSrcCodeIdentifier()), std::nullopt)
+            std::move(typeDef->GetPackageName()), std::move(typeDef->GetSrcCodeIdentifier()), std::nullopt, {})
     {
     }
 
@@ -38,7 +38,8 @@ public:
             func->GetParentCustomTypeDef()
             ? std::optional{std::move(func->GetParentCustomTypeDef()->GetSrcCodeIdentifier())}
             : std::nullopt,
-            func->GetSrcCodeIdentifier())
+            func->GetSrcCodeIdentifier(),
+            std::move(func->GetFuncType()->GetParamTypes()))
     {
     }
 
@@ -62,6 +63,16 @@ public:
         return genGuardName("PatchVarFlag");
     }
 
+    bool operator==(const PatchableName& other) const
+    {
+        return qualifiedName == other.qualifiedName;
+    }
+
+    bool operator!=(const PatchableName& other) const
+    {
+        return qualifiedName != other.qualifiedName;
+    }
+
     bool operator<(const PatchableName& other) const
     {
         return qualifiedName < other.qualifiedName;
@@ -70,10 +81,11 @@ public:
 private:
     std::optional<std::string> className;
     std::optional<std::string> funcName;
+    std::vector<Type*> funcParams;
     std::string qualifiedName;
 
-    PatchableName(std::string packageName, std::optional<std::string> className,
-        std::optional<std::string> funcName)
+    PatchableName(std::string packageName, std::optional<std::string> className, std::optional<std::string> funcName,
+        std::vector<Type*>&& funcParams)
         : className(std::move(className)),
           funcName(std::move(funcName))
     {
@@ -84,6 +96,7 @@ private:
         if (this->funcName) {
             this->qualifiedName += "." + *this->funcName;
         }
+        this->funcParams = funcParams;
     }
 
     std::string genGuardName(const std::string& postfix) const
@@ -106,8 +119,11 @@ private:
         if (funcName.has_value()) {
             auto n = funcName.value();
             name += className.has_value() ? toUpperCase(n) : n;
+            for (const auto param : funcParams) {
+                name += "_" + param->ToSrcCodeString();
+            }
         }
-        name += postfix;
+        name += "_" + postfix;
         return name;
     }
 };
@@ -124,7 +140,28 @@ struct Patchable final {
 
     bool operator<(const Patchable& other) const
     {
-        return funcName < other.funcName;
+        if (funcName != other.funcName) {
+            return funcName < other.funcName;
+        }
+
+        const auto firstParamsNum = func->GetNumOfParams();
+        const auto secondParamsNum = other.func->GetNumOfParams();
+        if (firstParamsNum != secondParamsNum) {
+            return firstParamsNum < secondParamsNum;
+        }
+
+        const auto firstParams = func->GetParams();
+        const auto secondParams = other.func->GetParams();
+        for (auto it1 = firstParams.begin(), it2 = secondParams.begin();
+             it1 != firstParams.end() && it2 != secondParams.end(); ++it1, ++it2) {
+            const auto firstType = (*it1)->GetType();
+            const auto secondType = (*it2)->GetType();
+            if (firstType != secondType) {
+                return firstType->ToSrcCodeString() < secondType->ToSrcCodeString();
+            }
+        }
+
+        return false;
     }
 };
 

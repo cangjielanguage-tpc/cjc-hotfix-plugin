@@ -55,5 +55,4 @@ for file in *.cj; do
   fi
 done
 
-
 echo "All tests passed"
