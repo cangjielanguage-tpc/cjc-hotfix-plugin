@@ -30,15 +30,15 @@ for file in *.cj; do
 
   if [ -f "$expected" ]; then
     echo "File to check results: $expected"
-    rm -r *_CHIR || true
+    rm -rf *_CHIR
     cjc "$file" "lib/$hotfix_lib" --import-path "lib" --plugin "$plugin" --dump-chir
     actual_data=`./main`
     expected_data=`cat "$expected"`
 
-    rm *.cjo || true
-    rm *.cjo.flag || true
+    rm -f *.cjo
+    rm -f *.cjo.flag
 
-    if diff -Z <(echo "$actual_data") <(echo "$expected_data"); then
+    if diff -Z -u <(echo "$actual_data") <(echo "$expected_data"); then
       echo "Passed"
     else
       echo "Failed"
