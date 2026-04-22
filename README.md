@@ -22,7 +22,7 @@ python3 build.py build --build_type <debug or release> <cangjie_toolchain_path>
 Run tests in corresponding test mode:
 
 ```bash
-python3 build.py build --run-tess <normal or stub> <cangjie_toolchain_path>
+python3 build.py build --run-tests <normal or stub> <cangjie_toolchain_path>
 ```
 
 ## Structure description
