@@ -34,7 +34,7 @@ bool matches(const AnnoInfo& annoInfo, const std::optional<std::regex>& regexpFi
 std::set<Patchable> findPatchables(const Package& package, const std::optional<std::regex>& regexpFilter)
 {
     std::set<Patchable> result;
-    for (const auto func : package.GetGlobalFuncs()) {
+    for (const auto func : package.GetGlobalFuncsWithBody()) {
         const auto funcName = PatchableName(func);
         const auto funcQualifiedName = funcName.getQualifiedName();
 #if DEBUG

@@ -97,8 +97,7 @@ ClassDef* Patcher::genPackageInitGuardClass() const
     const auto genPatchableMethod = [&](const std::string& name) -> void {
         const auto mt = builder.GetType<FuncType>(paramTypes, builder.GetUnitTy());
 
-        const auto m = builder.CreateFuncWithBody(INVALID_LOCATION, mt, name,
-            name, name, package->GetName(), {});
+        const auto m = builder.CreateFunction(mt, name, name, name, package->GetName(), {});
         m->EnableAttr(Attribute::VIRTUAL);
         m->EnableAttr(Attribute::COMPILER_ADD);
         m->EnableAttr(Attribute::NO_REFLECT_INFO);
@@ -133,8 +132,7 @@ ClassDef* Patcher::genPackageInitGuardClass() const
 
     const auto ctorType = builder.GetType<FuncType>(paramTypes, builder.GetUnitTy());
 
-    const auto ctor = builder.CreateFuncWithBody(INVALID_LOCATION, ctorType, "<init>",
-        "init", "<init>", package->GetName(), {});
+    const auto ctor = builder.CreateFunction(ctorType, "<init>", "init", "<init>", package->GetName(), {});
     ctor->SetFuncKind(CLASS_CONSTRUCTOR);
     ctor->EnableAttr(Attribute::COMPILER_ADD);
     ctor->EnableAttr(Attribute::PUBLIC);
@@ -279,7 +277,7 @@ void Patcher::genPackageInitGuardChecks(const Function* patchable, Type* guardCl
     CJC_ASSERT_WITH_MSG(guardVarType->IsRef(), "expected guard var type to be ref type");
     const auto guardVarBaseType = static_cast<RefType*>(guardVarType)->GetBaseType();
     CJC_ASSERT_WITH_MSG(guardVarBaseType->IsEnum(), "expected guard var base type to be enum");
-    const auto guardVarBaseEnumType = static_cast<EnumType*>(guardVarBaseType);
+    const auto guardVarBaseEnumType = dynamic_cast<EnumType*>(guardVarBaseType);
     CJC_ASSERT_WITH_MSG(guardVarBaseEnumType->IsOption(), "expected guard var base type to be option");
 
     const auto guardVarAlloc = CHIR::CreateAndAppendExpression<Allocate>(builder, guardVarType, guardVarBaseType,
@@ -417,8 +415,7 @@ Function* Patcher::genGuardVarsInitializer() const
     std::vector<Type*> paramTypes;
     const auto funcType = builder.GetType<FuncType>(paramTypes, builder.GetUnitTy());
     // TODO mangle?
-    const auto func = builder.CreateFuncWithBody(INVALID_LOCATION, funcType,
-        PATCHABLE_GUARD_VARS_INITIALIZER,
+    const auto func = builder.CreateFunction(funcType, PATCHABLE_GUARD_VARS_INITIALIZER,
         PATCHABLE_GUARD_VARS_INITIALIZER, PATCHABLE_GUARD_VARS_INITIALIZER, package->GetName(), {});
     func->EnableAttr(Attribute::COMPILER_ADD);
     func->EnableAttr(Attribute::NO_REFLECT_INFO);
@@ -485,7 +482,7 @@ Function* Patcher::genGuardVarsInitializer() const
     [protected] [abstract] func $sInitPatch: ($Patch&) -> S
   }
  */
-AbstractMethodInfo Patcher::genGuardMethod(const std::string& name, const Function* patchable) const
+Function* Patcher::genGuardMethod(const std::string& name, const Function* patchable) const
 {
 #ifdef DEBUG
     std::cout << "gen guard method for patchable func:" << std::endl;
@@ -503,26 +500,21 @@ AbstractMethodInfo Patcher::genGuardMethod(const std::string& name, const Functi
         patchableMethodType = builder.GetType<FuncType>(paramTypes, returnType);
     }
 
-    const auto paramTypes = patchableMethodType->GetParamTypes();
-    std::vector<Type*> methodParamTypes{builder.GetType<RefType>(guardClass->GetType())};
-    std::vector<AbstractMethodParam> methodParams;
-    for (size_t i = 0; i < paramTypes.size(); ++i) {
-        auto paramType = paramTypes.at(i);
-        methodParams.emplace_back(AbstractMethodParam{"p" + std::to_string(i), paramType});
-        methodParamTypes.emplace_back(paramType);
-    }
+    auto methodParamTypes = patchableMethodType->GetParamTypes();
+    methodParamTypes.emplace(methodParamTypes.begin(), builder.GetType<RefType>(guardClass->GetType()));
 
     const auto methodType = builder.GetType<FuncType>(methodParamTypes, patchableMethodType->GetReturnType());
+    const auto method = builder.CreateFunction(methodType, name, name, name, package->GetName(), {});
+    method->EnableAttr(Attribute::ABSTRACT);
+    method->EnableAttr(Attribute::PROTECTED);
+    method->EnableAttr(Attribute::NO_DEBUG_INFO);
+    method->EnableAttr(Attribute::COMPILER_ADD);
 
-    AttributeInfo attr;
-    attr.SetAttr(Attribute::ABSTRACT, true);
-    attr.SetAttr(Attribute::PROTECTED, true);
-    attr.SetAttr(Attribute::NO_DEBUG_INFO, true);
-    attr.SetAttr(Attribute::COMPILER_ADD, true);
+    for (const auto paramType : methodParamTypes) {
+        builder.CreateParameter(paramType, INVALID_LOCATION, *method);
+    }
 
-    auto method = AbstractMethodInfo{name, name, methodType, methodParams, attr, AnnoInfo{},
-                                     std::vector<GenericType*>{}, false, guardClass};
-    guardClass->AddAbstractMethod(method);
+    guardClass->AddMethod(method);
 
 #ifdef DEBUG
     std::cout << "guard class with new guard method:" << std::endl;
@@ -555,8 +547,8 @@ GlobalVar* Patcher::genGuardVar(const std::string& name, ClassType* guardClassTy
     typeArgs.emplace_back(builder.GetType<RefType>(guardClassType));
     const auto guardVarType = builder.GetType<EnumType>(pluginCtx->optionDef, typeArgs);
 
-    const auto gv = builder.CreateGlobalVarWithInit(INVALID_LOCATION, builder.GetType<RefType>(guardVarType),
-        name, name, name, package->GetName());
+    const auto gv = builder.CreateGlobalVar(builder.GetType<RefType>(guardVarType), name, name, name,
+        package->GetName());
     if (needToInstantiate) {
 #ifdef DEBUG
         std::cout << "Instantiate guard var" << std::endl;
@@ -597,8 +589,8 @@ GlobalVar* Patcher::genGuardVarFlag(const std::string& name) const
 #ifdef DEBUG
     std::cout << "Gen guard var flag " << name << std::endl;
 #endif
-    const auto gvf = builder.CreateGlobalVarWithInit(INVALID_LOCATION,
-        builder.GetType<RefType>(builder.GetBoolTy()), name, name, name, package->GetName());
+    const auto gvf = builder.CreateGlobalVar(builder.GetType<RefType>(builder.GetBoolTy()), name, name, name,
+        package->GetName());
     const auto falseLiteral = builder.CreateLiteralValue<BoolLiteral>(builder.GetBoolTy(), false);
     gvf->SetInitializer(*falseLiteral);
 #ifdef DEBUG
@@ -747,8 +739,7 @@ GlobalVar* Patcher::genGuardVarFlag(const std::string& name) const
       RaiseException(%16)
   }
  */
-void Patcher::genGuardChecks(const Function* const patchable, GlobalVar* guardVarFlag,
-    const AbstractMethodInfo& guardMethod)
+void Patcher::genGuardChecks(const Function* const patchable, GlobalVar* guardVarFlag, const Function* guardMethod)
 {
 #ifdef DEBUG
     std::cout << "Gen guard check" << std::endl;
@@ -810,8 +801,7 @@ void Patcher::genGuardChecks(const Function* const patchable, GlobalVar* guardVa
 
         const auto methodName = PatchableName(modifiedPatchable).getGuardMethodName();
 
-        const auto ctor = builder.CreateFuncWithBody(INVALID_LOCATION, ctorType, methodName,
-            "init", methodName, package->GetName(), {});
+        const auto ctor = builder.CreateFunction(ctorType, methodName, "init", methodName, package->GetName(), {});
         ctor->SetFuncKind(modifiedPatchable->GetFuncKind());
         ctor->EnableAttr(Attribute::COMPILER_ADD);
         ctor->EnableAttr(Attribute::PRIVATE);
@@ -874,7 +864,7 @@ void Patcher::genGuardChecks(const Function* const patchable, GlobalVar* guardVa
         typeCast->GetResult(), std::vector<uint64_t>{1}, callPatchBlock);
     caller->GetResult()->EnableAttr(Attribute::READONLY);
 
-    auto funcType = dynamic_cast<FuncType*>(guardMethod.methodTy);
+    auto funcType = guardMethod->GetFuncType();
     auto funcParameters = GetFuncParams(*patchableBody);
     if (modifiedPatchable->IsConstructor()) {
         // remove patch var from arguments
@@ -894,9 +884,9 @@ void Patcher::genGuardChecks(const Function* const patchable, GlobalVar* guardVa
                 .thisType = guardVarBaseType->GetTypeArgs().front(),
             },
             .virMethodCtx = VirMethodContext{
-                .srcCodeIdentifier = guardMethod.methodName,
+                .srcCodeIdentifier = guardMethod->GetSrcCodeIdentifier(),
                 .originalFuncType = funcType,
-                .genericTypeParams = guardMethod.methodGenericTypeParams,
+                .genericTypeParams = guardMethod->GetGenericTypeParams(),
             }
         };
     const auto callMethod = CHIR::CreateAndAppendExpression<Invoke>(builder, funcType->GetReturnType(), callContext,
