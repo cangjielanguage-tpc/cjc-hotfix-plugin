@@ -11,7 +11,7 @@ Clean directory with artifacts (`output`) if it exists:
 python3 build.py clean
 ```
 
-Build `output/libcjc_hotfix_plugin.so` in corresponding build mode:
+Build `output/libhotfix-plugin.so` in corresponding build mode:
 
 ```bash
 python3 build.py build --build_type <debug or release> <cangjie_toolchain_path>

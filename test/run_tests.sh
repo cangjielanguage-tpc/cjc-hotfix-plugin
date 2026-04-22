@@ -6,7 +6,7 @@ expected_ext=$1
 build_dir=$2
 cangjie_home=$3
 
-plugin="$build_dir/libcjc_hotfix_plugin.so"
+plugin="$build_dir/libhotfix-plugin.so"
 
 envsetup=$cangjie_home/"envsetup.sh"
 
