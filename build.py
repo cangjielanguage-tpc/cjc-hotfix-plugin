@@ -89,7 +89,6 @@ def main():
                               help="Build configuration (default: debug)")
     build_parser.add_argument("--run-tests",
                               choices=["normal", "stub"],
-                              default="normal",
                               help="Run tests after successful build")
     build_parser.add_argument("-j", "--jobs",
                               type=int,

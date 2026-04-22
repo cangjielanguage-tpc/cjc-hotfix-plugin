@@ -18,11 +18,11 @@ include_directories(
 
 file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS "*.cpp")
 
-add_executable(cjc_hotfix_plugin_test "${TEST_SOURCES}")
+add_executable(hotfix_plugin_test "${TEST_SOURCES}")
 
-target_link_directories(cjc_hotfix_plugin_test PRIVATE "${CANGJIE_PATH}/tools/lib")
-target_link_libraries(cjc_hotfix_plugin_test PRIVATE "cangjie-lsp")
+target_link_directories(hotfix_plugin_test PRIVATE "${CANGJIE_PATH}/tools/lib")
+target_link_libraries(hotfix_plugin_test PRIVATE "cangjie-lsp")
 
-target_link_libraries(cjc_hotfix_plugin_test PRIVATE cjc_hotfix_plugin GTest::gtest_main)
+target_link_libraries(hotfix_plugin_test PRIVATE hotfix-plugin GTest::gtest_main)
 
-gtest_discover_tests(cjc_hotfix_plugin_test)
+gtest_discover_tests(hotfix_plugin_test)
