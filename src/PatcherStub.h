@@ -58,7 +58,7 @@ public:
         }
 
         for (auto& [_, stubName] : stubsMap) {
-            for (auto func : package.GetGlobalFuncs()) {
+            for (auto func : package.GetGlobalFuncsWithBody()) {
                 if (const auto name = func->GetIdentifierWithoutPrefix(); name == stubName) {
                     stubCode.emplace(name, func->GetBody());
                 }
@@ -77,12 +77,12 @@ public:
             const auto newBg = builder.CreateBlockGroup(*method);
             method->ReplaceBody(*newBg);
 
-            for (const auto paramType : method->GetFuncType()->GetParamTypes()) {
-                builder.CreateParameter(paramType, INVALID_LOCATION, *method);
-            }
-
             const auto newBlock = builder.CreateBlock(newBg);
             newBg->SetEntryBlock(newBlock);
+
+            const auto retVal = CHIR::CreateAndAppendExpression<Allocate>(builder, INVALID_LOCATION,
+            builder.GetType<RefType>(builder.GetUnitTy()), builder.GetUnitTy(), newBlock)->GetResult();
+            method->SetReturnValue(*retVal);
 
             const auto terminator = builder.CreateTerminator<Exit>(newBlock);
             newBlock->AppendExpression(terminator);
@@ -149,7 +149,7 @@ public:
     Function* prepareGuardVarsInitializer()
     {
         Function* guardVarInitializer = nullptr;
-        for (const auto func : package.GetGlobalFuncs()) {
+        for (const auto func : package.GetGlobalFuncsWithBody()) {
             if (func->GetSrcCodeIdentifier() == PATCHABLE_GUARD_VARS_INITIALIZER) {
                 guardVarInitializer = func;
                 break;
@@ -163,6 +163,10 @@ public:
 
         const auto newBlock = builder.CreateBlock(newBg);
         newBg->SetEntryBlock(newBlock);
+
+        const auto retVal = CHIR::CreateAndAppendExpression<Allocate>(builder, INVALID_LOCATION,
+            builder.GetType<RefType>(builder.GetUnitTy()), builder.GetUnitTy(), newBlock)->GetResult();
+        guardVarInitializer->SetReturnValue(*retVal);
 
         GlobalVar* guardVar = nullptr;
         for (const auto& globalVar : package.GetGlobalVars()) {
@@ -197,7 +201,7 @@ public:
     Function* findPrintlnFunc() const
     {
         Function* printlnFunc = nullptr;
-        for (const auto globalFunc : package.GetImportedFunctions()) {
+        for (const auto globalFunc : package.GetGlobalFuncsWithoutBody()) {
             if (globalFunc->GetSrcCodeIdentifier() != "println") {
                 continue;
             }
@@ -219,27 +223,28 @@ public:
         updateGuardVarsInitializer(patchable);
     }
 
-    AbstractMethodInfo findGuardMethod(const std::string& name) const
+    Function* findGuardMethod(const std::string& name) const
     {
-        for (const auto& method : guardClass->GetAbstractMethods()) {
-            if (method.methodName == name) {
+        for (const auto& method : guardClass->GetMethods()) {
+            if (method->GetSrcCodeIdentifier() == name) {
                 return method;
             }
         }
         CJC_ABORT_WITH_MSG("unable to find guard method with name " + name);
     }
 
-    void genPatchMethodStub(const AbstractMethodInfo& baseMethod) const
+    void genPatchMethodStub(const Function* baseMethod) const
     {
-        const auto baseMethodType = dynamic_cast<FuncType*>(baseMethod.methodTy);
+        const auto baseMethodType = baseMethod->GetFuncType();
         const auto returnType = baseMethodType->GetReturnType();
 
         std::vector paramTypes = baseMethodType->GetParamTypes();
         paramTypes.front() = builder.GetType<RefType>(patchClass->GetType());
         const auto overriddenMethodType = builder.GetType<FuncType>(paramTypes, returnType);
 
-        const auto overriddenMethod = builder.CreateFuncWithBody(INVALID_LOCATION, overriddenMethodType,
-            baseMethod.methodName, baseMethod.methodName, baseMethod.methodName,
+        const auto methodName = baseMethod->GetSrcCodeIdentifier();
+        const auto overriddenMethod = builder.CreateFunction(overriddenMethodType,
+            methodName, methodName, methodName,
             package.GetName(), {});
         overriddenMethod->EnableAttr(Attribute::OVERRIDE);
         overriddenMethod->EnableAttr(Attribute::PROTECTED);
@@ -252,9 +257,9 @@ public:
         const auto body = builder.CreateBlock(bg);
         bg->SetEntryBlock(body);
 
-        if (const auto patchStub = stubsMap.find(baseMethod.methodName); patchStub == stubsMap.end()) {
+        if (const auto patchStub = stubsMap.find(methodName); patchStub == stubsMap.end()) {
 #if DEBUG
-            std::cout << "stub method for " << baseMethod.methodName << " was not found in stub map" << std::endl;
+            std::cout << "stub method for " << methodName << " was not found in stub map" << std::endl;
 #endif
 
             /*
@@ -290,12 +295,12 @@ public:
         } else {
             // generate stub according to stub.map file
 #if DEBUG
-            std::cout << "search stub code for " << baseMethod.methodName << ": " << patchStub->second << std::endl;
+            std::cout << "search stub code for " << methodName << ": " << patchStub->second << std::endl;
 #endif
             if (const auto patchStubCode = stubCode.find(patchStub->second); patchStubCode == stubCode.end()) {
 #if DEBUG
                 std::cout << "candidates: " << std::endl;
-                for (const auto func : package.GetGlobalFuncs()) {
+                for (const auto func : package.GetGlobalFuncsWithBody()) {
                     if (func->GetPackageName() == package.GetName()) {
                         std::cout << func->GetIdentifierWithoutPrefix() << std::endl;
                     }
@@ -323,14 +328,8 @@ public:
                     }
                 }
 
-                std::vector<Parameter*> newParams;
-                for (auto param : overriddenMethod->GetParams()) {
-                    newParams.emplace_back(param);
-                }
                 overriddenMethod->ReplaceBody(*patchStubCode->second);
-                for (const auto param : newParams) {
-                    overriddenMethod->AddParam(*param);
-                }
+
                 // as a function has a new body, we need to fix param refs
                 const auto parameters = GetFuncParams(*overriddenMethod->GetBody());
                 const auto fixParamsRef = [&](Expression& e) {
@@ -360,12 +359,12 @@ public:
                     declClass->SetMethods(newMethods);
                 }
                 std::vector<Function*> newGlobalFuncs;
-                for (auto func : package.GetGlobalFuncs()) {
+                for (const auto& func : package.GetGlobalFunctions()) {
                     if (func->GetIdentifierWithoutPrefix() != stubMethod->GetIdentifierWithoutPrefix()) {
                         newGlobalFuncs.emplace_back(func);
                     }
                 }
-                package.SetGlobalFuncs(newGlobalFuncs);
+                package.SetAllGlobalFuncs(std::move(newGlobalFuncs));
 
                 // regenerate expressions in block to fix identifiers
                 for (const auto block : overriddenMethod->GetBody()->GetBlocks()) {
@@ -409,6 +408,11 @@ public:
         const auto storeToGuardVarFlag = builder.CreateExpression<Store>(builder.GetUnitTy(), trueExpr->GetResult(),
             guardVarFlag, guardVarsInitializerBody);
         storeToGuardVarFlag->MoveAfter(trueExpr);
+
+#if DEBUG
+        std::cout << "guardVarsInit after update:" << std::endl;
+        std::cout << guardVarsInitializerBody->ToString() << std::endl;
+#endif
     }
 
 private:

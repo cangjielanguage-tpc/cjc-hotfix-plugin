@@ -35,8 +35,8 @@ for file in *.cj; do
     actual_data=`./main`
     expected_data=`cat "$expected"`
 
-    rm *.cjo
-    rm *.cjo.flag
+    rm *.cjo || true
+    rm *.cjo.flag || true
 
     if diff -Z <(echo "$actual_data") <(echo "$expected_data"); then
       echo "Passed"
