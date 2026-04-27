@@ -382,7 +382,7 @@ ClassDef* Patcher::genGuardClass() const
     std::cout << "Create guard class" << std::endl;
 #endif
     const auto cl = builder.CreateClass(INVALID_LOCATION, PATCHABLE_GUARD_CLASS_NAME,
-        PATCHABLE_GUARD_CLASS_NAME, PATCHABLE_GUARD_CLASS_NAME, true, false);
+        PATCHABLE_GUARD_CLASS_NAME, package->GetName(), true, false);
     const auto guardClassType = builder.GetType<ClassType>(cl);
     cl->SetType(*guardClassType);
     cl->SetSuperClassTy(*builder.GetObjectTy());
