@@ -17,8 +17,8 @@ bool matchesRegexpFilter(const std::optional<std::regex>& regexpFilter, const st
 bool isPatchable(const AnnoInfo& annoInfo)
 {
     if (annoInfo.IsAvailable()) {
-        for (const auto& pair : annoInfo.annoPairs) {
-            if (pair.annoClassName == "patchable") {
+        for (const auto& annoInstance : annoInfo.GetCustomAnnoInstances()) {
+            if (annoInstance.GetAnnoClassName() == "patchable") {
                 return true;
             }
         }
