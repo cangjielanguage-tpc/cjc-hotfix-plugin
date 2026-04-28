@@ -314,7 +314,7 @@ public:
 
                 const auto stubMethod = patchStubCode->second->GetOwnerFunc();
 #if DEBUG
-                std::cout << stubMethod->ToString() << std::endl;
+                std::cout << stubMethod->ToString(0) << std::endl;
 #endif
 
                 const auto currRetVal = stubMethod->GetReturnValue();
@@ -380,7 +380,7 @@ public:
         }
 #if DEBUG
         std::cout << "patch after replacement:" << std::endl;
-        std::cout << overriddenMethod->ToString() << std::endl;
+        std::cout << overriddenMethod->ToString(0) << std::endl;
 #endif
         patchClass->AddMethod(overriddenMethod);
     }
@@ -411,7 +411,7 @@ public:
 
 #if DEBUG
         std::cout << "guardVarsInit after update:" << std::endl;
-        std::cout << guardVarsInitializerBody->ToString() << std::endl;
+        std::cout << guardVarsInitializerBody->ToString(0) << std::endl;
 #endif
     }
 

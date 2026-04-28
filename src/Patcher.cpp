@@ -123,7 +123,7 @@ ClassDef* Patcher::genPackageInitGuardClass() const
 
 #ifdef DEBUG
         std::cout << "method:" << std::endl;
-        std::cout << m->ToString() << std::endl;
+        std::cout << m->ToString(0) << std::endl;
 #endif
     };
 
@@ -156,7 +156,7 @@ ClassDef* Patcher::genPackageInitGuardClass() const
 
 #ifdef DEBUG
     std::cout << "ctor:" << std::endl;
-    std::cout << ctor->ToString() << std::endl;
+    std::cout << ctor->ToString(0) << std::endl;
 #endif
 
 #ifdef DEBUG
@@ -366,7 +366,7 @@ void Patcher::genPackageInitGuardChecks(const Function* patchable, Type* guardCl
     CHIR::CreateAndAppendTerminator<Exit>(builder, callPatchBlock);
 
 #ifdef DEBUG
-    std::cout << patchable->ToString() << std::endl;
+    std::cout << patchable->ToString(0) << std::endl;
 #endif
 }
 
@@ -486,7 +486,7 @@ Function* Patcher::genGuardMethod(const std::string& name, const Function* patch
 {
 #ifdef DEBUG
     std::cout << "gen guard method for patchable func:" << std::endl;
-    std::cout << patchable->ToString() << std::endl;
+    std::cout << patchable->ToString(0) << std::endl;
 #endif
 
     auto patchableMethodType = static_cast<FuncType*>(patchable->GetType());
@@ -570,11 +570,11 @@ GlobalVar* Patcher::genGuardVar(const std::string& name, ClassType* guardClassTy
         storeGuardVar->MoveAfter(tuple);
 #ifdef DEBUG
         std::cout << "guard vars initializer body:" << std::endl;
-        std::cout << bg->ToString() << std::endl;
+        std::cout << bg->ToString(0) << std::endl;
 #endif
     }
 #ifdef DEBUG
-    std::cout << gv->ToString() << std::endl;
+    std::cout << gv->ToString(0) << std::endl;
 #endif
     return gv;
 }
@@ -594,7 +594,7 @@ GlobalVar* Patcher::genGuardVarFlag(const std::string& name) const
     const auto falseLiteral = builder.CreateLiteralValue<BoolLiteral>(builder.GetBoolTy(), false);
     gvf->SetInitializer(*falseLiteral);
 #ifdef DEBUG
-    std::cout << gvf->ToString() << std::endl;
+    std::cout << gvf->ToString(0) << std::endl;
 #endif
     return gvf;
 }
@@ -922,10 +922,10 @@ void Patcher::genGuardChecks(const Function* const patchable, GlobalVar* guardVa
 #ifdef DEBUG
     if (modifiedPatchable->IsConstructor()) {
         std::cout << "new ctor:" << std::endl;
-        std::cout << modifiedPatchable->ToString() << std::endl;
+        std::cout << modifiedPatchable->ToString(0) << std::endl;
     }
     std::cout << "updated patchable:" << std::endl;
-    std::cout << patchable->ToString() << std::endl;
+    std::cout << patchable->ToString(0) << std::endl;
 #endif
 }
 
