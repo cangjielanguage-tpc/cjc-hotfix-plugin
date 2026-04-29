@@ -103,6 +103,7 @@ ClassDef* Patcher::genPackageInitGuardClass() const
         m->EnableAttr(Attribute::NO_REFLECT_INFO);
         m->EnableAttr(Attribute::NO_INLINE);
         m->EnableAttr(Attribute::PROTECTED);
+        m->Set<LinkTypeInfo>(Linkage::EXTERNAL);
 
         for (const auto paramType : paramTypes) {
             builder.CreateParameter(paramType, INVALID_LOCATION, *m);
@@ -136,6 +137,7 @@ ClassDef* Patcher::genPackageInitGuardClass() const
     ctor->SetFuncKind(CLASS_CONSTRUCTOR);
     ctor->EnableAttr(Attribute::COMPILER_ADD);
     ctor->EnableAttr(Attribute::PUBLIC);
+    ctor->Set<LinkTypeInfo>(Linkage::EXTERNAL);
 
     for (const auto paramType : paramTypes) {
         builder.CreateParameter(paramType, INVALID_LOCATION, *ctor);
@@ -388,6 +390,7 @@ ClassDef* Patcher::genGuardClass() const
     cl->SetSuperClassTy(*builder.GetObjectTy());
     cl->EnableAttr(Attribute::ABSTRACT);
     cl->EnableAttr(Attribute::COMPILER_ADD);
+    cl->Set<LinkTypeInfo>(Linkage::EXTERNAL);
 
 #ifdef DEBUG
     std::cout << "Guard class:" << std::endl;
@@ -420,6 +423,7 @@ Function* Patcher::genGuardVarsInitializer() const
     func->EnableAttr(Attribute::COMPILER_ADD);
     func->EnableAttr(Attribute::NO_REFLECT_INFO);
     func->EnableAttr(Attribute::NO_INLINE);
+    func->Set<LinkTypeInfo>(Linkage::EXTERNAL);
 
     const auto bg = builder.CreateBlockGroup(*func);
     func->InitBody(*bg);
@@ -509,6 +513,7 @@ Function* Patcher::genGuardMethod(const std::string& name, const Function* patch
     method->EnableAttr(Attribute::PROTECTED);
     method->EnableAttr(Attribute::NO_DEBUG_INFO);
     method->EnableAttr(Attribute::COMPILER_ADD);
+    method->Set<LinkTypeInfo>(Linkage::EXTERNAL);
 
     for (const auto paramType : methodParamTypes) {
         builder.CreateParameter(paramType, INVALID_LOCATION, *method);
@@ -549,6 +554,7 @@ GlobalVar* Patcher::genGuardVar(const std::string& name, ClassType* guardClassTy
 
     const auto gv = builder.CreateGlobalVar(builder.GetType<RefType>(guardVarType), name, name, name,
         package->GetName());
+    gv->Set<LinkTypeInfo>(Linkage::EXTERNAL);
     if (needToInstantiate) {
 #ifdef DEBUG
         std::cout << "Instantiate guard var" << std::endl;
@@ -591,6 +597,7 @@ GlobalVar* Patcher::genGuardVarFlag(const std::string& name) const
 #endif
     const auto gvf = builder.CreateGlobalVar(builder.GetType<RefType>(builder.GetBoolTy()), name, name, name,
         package->GetName());
+    gvf->Set<LinkTypeInfo>(Linkage::EXTERNAL);
     const auto falseLiteral = builder.CreateLiteralValue<BoolLiteral>(builder.GetBoolTy(), false);
     gvf->SetInitializer(*falseLiteral);
 #ifdef DEBUG
@@ -805,6 +812,7 @@ void Patcher::genGuardChecks(const Function* const patchable, GlobalVar* guardVa
         ctor->SetFuncKind(modifiedPatchable->GetFuncKind());
         ctor->EnableAttr(Attribute::COMPILER_ADD);
         ctor->EnableAttr(Attribute::PRIVATE);
+        ctor->Set<LinkTypeInfo>(Linkage::EXTERNAL);
         if (!isStructCtor) {
             // SKIP_ANALYSIS attribute disables different static checks,
             // e.g. that every instance field is initialized (see Cangjie::CHIR::VarInitCheck) in constructor,
