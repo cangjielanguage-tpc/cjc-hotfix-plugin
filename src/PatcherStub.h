@@ -143,6 +143,7 @@ public:
         patchClass->SetSuperClassTy(*guardClass->GetType());
         patchClass->EnableAttr(Attribute::INTERNAL);
         patchClass->EnableAttr(Attribute::COMPILER_ADD);
+        patchClass->Set<LinkTypeInfo>(Linkage::EXTERNAL);
         return patchClass;
     }
 
@@ -248,6 +249,7 @@ public:
             package.GetName(), {});
         overriddenMethod->EnableAttr(Attribute::OVERRIDE);
         overriddenMethod->EnableAttr(Attribute::PROTECTED);
+        overriddenMethod->Set<LinkTypeInfo>(Linkage::EXTERNAL);
         for (const auto paramType : paramTypes) {
             builder.CreateParameter(paramType, INVALID_LOCATION, *overriddenMethod);
         }
