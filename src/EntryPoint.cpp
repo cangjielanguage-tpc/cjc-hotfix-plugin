@@ -1,17 +1,17 @@
-#include "cangjie/CHIR/IR/CHIRBuilder.h"
-#include "cangjie/CHIR/IR/Package.h"
-#include "cangjie/MetaTransformation/MetaTransform.h"
-#include "cangjie/CHIR/Serializer/CHIRSerializer.h"
 #include "PatchableFinder.h"
 #include "Patcher.h"
+#include "cangjie/CHIR/IR/CHIRBuilder.h"
+#include "cangjie/CHIR/IR/Package.h"
+#include "cangjie/CHIR/Serializer/CHIRSerializer.h"
+#include "cangjie/MetaTransformation/MetaTransform.h"
 #ifdef STUB_TEST
 #include "PatcherStub.h"
 #endif
 #include "PluginContext.h"
 #include "TypeFilterGenerator.h"
 #include "toml.h"
-#include <iostream>
 #include <filesystem>
+#include <iostream>
 #include <memory>
 #include <regex>
 #include <set>
@@ -23,9 +23,7 @@ using namespace Cangjie::CHIR;
 class EntryPoint final : public MetaTransform<Package> {
 public:
     explicit EntryPoint(CHIRBuilder& b)
-        : builder(b),
-          pluginContext(createPluginContext(builder)),
-          tomlFilter(formFilterByTomlDirective())
+        : builder(b), pluginContext(createPluginContext(builder)), tomlFilter(formFilterByTomlDirective())
     {
     }
 
@@ -34,19 +32,26 @@ public:
 #ifdef DEBUG
         std::cout << "Running Hotfix plugin for package " << package.GetName() << std::endl;
 #endif
-        // IR checks are disabled in release mode as compiler tries to check abstract methods offsets before Canonicalization
-        // and VTable generation. That seems buggy.
+        // IR checks are disabled in release mode as compiler tries to check abstract methods offsets before
+        // Canonicalization and VTable generation. That seems buggy.
         builder.DisableIRCheckerAfterPlugin();
 
         auto patcher = Patcher(builder, pluginContext);
         const auto& patchables = findPatchables(package, tomlFilter);
         for (const auto& patchable : patchables) {
 #ifdef DEBUG
-            std::cout << std::endl << std::endl << std::endl << "Found patchable method: " <<
-                patchable.funcName.getQualifiedName() << "(" << patchable.func->GetIdentifierWithoutPrefix() << ")"
-                << std::endl;
+            std::cout << std::endl
+                      << std::endl
+                      << std::endl
+                      << "Found patchable method: " << patchable.funcName.getQualifiedName() << "("
+                      << patchable.func->GetIdentifierWithoutPrefix() << ")" << std::endl;
 #endif
             patcher.patch(patchable);
+        }
+
+        // We want to export global vars such as $has_applied_pkg_init_func to access them during interpretation.
+        for (const auto& globalVar : package.GetGlobalVars()) {
+            globalVar->Set<LinkTypeInfo>(Linkage::EXTERNAL);
         }
 
 #ifdef STUB_TEST
@@ -86,8 +91,7 @@ private:
             if (importedClass->GetSrcCodeIdentifier() == "Exception") {
                 exceptionDef = importedClass;
                 for (const auto& method : importedClass->GetMethods()) {
-                    if (method->IsConstructor() &&
-                        method->GetNumOfParams() == 2 &&
+                    if (method->IsConstructor() && method->GetNumOfParams() == 2 &&
                         method->GetParam(1)->GetType() == b.GetStringTy()) {
                         exceptionInitDef = method;
                         break;
@@ -99,9 +103,7 @@ private:
         CJC_ASSERT_WITH_MSG(exceptionDef, "unable to find Exception definition");
         CJC_ASSERT_WITH_MSG(exceptionInitDef, "unable to find Exception.<init>(String) definition");
 
-        return std::shared_ptr{
-            std::make_shared<PluginContext>(optionDef, exceptionDef, exceptionInitDef)
-        };
+        return std::shared_ptr{std::make_shared<PluginContext>(optionDef, exceptionDef, exceptionInitDef)};
     }
 
     static std::optional<std::regex> formFilterByTomlDirective()
