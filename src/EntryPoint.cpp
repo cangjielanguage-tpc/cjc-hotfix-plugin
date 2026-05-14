@@ -49,11 +49,6 @@ public:
             patcher.patch(patchable);
         }
 
-        // We want to export global vars such as $has_applied_pkg_init_func to access them during interpretation.
-        for (const auto& globalVar : package.GetGlobalVars()) {
-            globalVar->Set<LinkTypeInfo>(Linkage::EXTERNAL);
-        }
-
 #ifdef STUB_TEST
         const auto patcherStub = PatcherStub(package, builder);
         for (const auto& patchable : patchables) {

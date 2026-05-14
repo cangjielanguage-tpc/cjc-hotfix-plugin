@@ -27,19 +27,23 @@ private:
     void genPackageInitGuardChecks(const Function* patchable, Type* guardClassType, GlobalVar* guardVar,
         GlobalVar* guardVarFlag, const Function* guardMethod, Function* guardClassCtor) const;
 
+    void genPackageInitAccessors(GlobalVar* flag, const PatchableName::PackageInitAccessorKind kind) const;
+
     ClassDef* genGuardClass() const;
 
     Function* genGuardVarsInitializer() const;
 
     Function* genGuardMethod(const std::string& name, const Function* patchable) const;
 
-    GlobalVar* genGuardVar(const std::string& name, ClassType* guardClassType, bool needToInstantiate) const;
+    GlobalVar* genGuardVar(ClassType* guardClassType, bool forPackageInit) const;
 
     GlobalVar* genGuardVarFlag(const std::string& name) const;
 
     void genGuardChecks(const Function* patchable, GlobalVar* guardVarFlag, const Function *guardMethod);
 
     void genShouldNotReachHere(Block* block) const;
+
+    Function* createEmptyFunctionWithUnitRetVal(const std::string& name, std::vector<Type*> paramTypes) const;
 };
 }
 #endif // PATCHER_H

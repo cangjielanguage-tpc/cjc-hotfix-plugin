@@ -26,7 +26,7 @@ public:
         if (package.GetName() == "package_init") {
             preparePackageInits();
         }
-        guardClass = findGuardClass(PATCHABLE_GUARD_CLASS_NAME);
+        guardClass = findGuardClass(PatchableName(&package).genGuardClassName(false));
         patchClass = genPatchClass(guardClass);
         guardVarsInitializer = prepareGuardVarsInitializer();
 
@@ -68,7 +68,7 @@ public:
 
     void preparePackageInits() const
     {
-        const auto guardClass = findGuardClass(PACKAGE_INIT_GUARD_CLASS_NAME);
+        const auto guardClass = findGuardClass(PatchableName(&package).genGuardClassName(true));
         for (const auto& method : guardClass->GetMethods()) {
             if (method->IsConstructor()) {
                 continue;
@@ -102,7 +102,7 @@ public:
 
         GlobalVar* packageInitGuardVarFlag = nullptr;
         for (const auto& globalVar : package.GetGlobalVars()) {
-            if (globalVar->GetSrcCodeIdentifier() == PACKAGE_INIT_GUARD_VAR_FLAG_NAME) {
+            if (globalVar->GetSrcCodeIdentifier() == PatchableName(&package).genGuardVarFlagName(true)) {
                 packageInitGuardVarFlag = globalVar;
                 break;
             }
@@ -135,7 +135,7 @@ public:
 
     ClassDef* genPatchClass(const ClassDef* guardClass) const
     {
-        const auto patchClassName = guardClass->GetSrcCodeIdentifier() + "Impl";
+        const auto patchClassName = PatchableName(guardClass).genPatchClassName();
         const auto patchClass = builder.CreateClass(INVALID_LOCATION, patchClassName, patchClassName,
             package.GetName(), true, false);
         const auto patchClassType = builder.GetType<ClassType>(patchClass);
@@ -151,7 +151,7 @@ public:
     {
         Function* guardVarInitializer = nullptr;
         for (const auto func : package.GetGlobalFuncsWithBody()) {
-            if (func->GetSrcCodeIdentifier() == PATCHABLE_GUARD_VARS_INITIALIZER) {
+            if (func->GetSrcCodeIdentifier() == PatchableName(&package).genGuardVarInitializedName()) {
                 guardVarInitializer = func;
                 break;
             }
@@ -171,7 +171,7 @@ public:
 
         GlobalVar* guardVar = nullptr;
         for (const auto& globalVar : package.GetGlobalVars()) {
-            if (globalVar->GetSrcCodeIdentifier() == PATCHABLE_GUARD_VAR_NAME) {
+            if (globalVar->GetSrcCodeIdentifier() == PatchableName(&package).genGuardVarName(false)) {
                 guardVar = globalVar;
             }
         }
@@ -218,8 +218,7 @@ public:
 
     void patch(const Patchable& patchable) const
     {
-        const auto guardMethod = findGuardMethod(
-            guardClass->GetSrcCodeIdentifier() + patchable.funcName.getGuardMethodName());
+        const auto guardMethod = findGuardMethod(patchable.funcName.genGuardMethodName(PatchableName::GuardMethodKind::PLAIN));
         genPatchMethodStub(guardMethod);
         updateGuardVarsInitializer(patchable);
     }
@@ -389,7 +388,7 @@ public:
 
     void updateGuardVarsInitializer(const Patchable& patchable) const
     {
-        const auto guardVarFlagName = patchable.funcName.getGuardVarFlagName();
+        const auto guardVarFlagName = patchable.funcName.genGuardVarFlagName(false);
 
         Value* guardVarFlag = nullptr;
         for (const auto var : package.GetGlobalVars()) {
