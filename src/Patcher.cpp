@@ -1,9 +1,7 @@
 #include "Patcher.h"
 
-
 #include "cangjie/CHIR/Serializer/CHIRSerializer.h"
 #include "cangjie/CHIR/Utils/Utils.h"
-#include <iostream>
 #include <memory>
 
 using namespace Cangjie;
@@ -17,9 +15,9 @@ Patcher::Patcher(CHIRBuilder& builder, const std::shared_ptr<PluginContext>& plu
 {
     const auto guardClass = genPackageInitGuardClass();
     const auto guardClassType = guardClass->GetType();
-    const auto guardVar = genGuardVar(PACKAGE_INIT_GUARD_VAR_NAME, guardClassType, false);
+    const auto guardVar = genGuardVar(guardClassType, true);
     guardVar->SetInitFunc(*package->GetPackageInitFunc());
-    const auto guardVarFlag = genGuardVarFlag(PACKAGE_INIT_GUARD_VAR_FLAG_NAME);
+    const auto guardVarFlag = genGuardVarFlag(PatchableName(package).genGuardVarFlagName(true));
     const auto guardClassMethods = guardClass->GetMethods();
     CJC_ASSERT_WITH_MSG(guardClassMethods.size() == 3, "expected package init guard class to have 3 methods");
     const auto guardClassCtor = guardClassMethods.back();
@@ -29,6 +27,25 @@ Patcher::Patcher(CHIRBuilder& builder, const std::shared_ptr<PluginContext>& plu
         guardClassMethods.front(), guardClassCtor);
     genPackageInitGuardChecks(package->GetPackageLiteralInitFunc(), guardClassType, guardVar, guardVarFlag,
         guardClassMethods.at(1), guardClassCtor);
+
+    GlobalVar* packageInitFlag = nullptr;
+    GlobalVar* packageInitLiteralFlag = nullptr;
+    for (const auto globalVar : package->GetGlobalVars()) {
+        const auto name = globalVar->GetSrcCodeIdentifier();
+        if (packageInitFlag && packageInitLiteralFlag) {
+            break;
+        }
+        if (name == GV_PKG_INIT_ONCE_FLAG) {
+            packageInitFlag = globalVar;
+        } else if (name == "has_invoked_pkg_init_literal") {
+            packageInitLiteralFlag = globalVar;
+        }
+    }
+    CJC_ASSERT_WITH_MSG(packageInitFlag, "unable to find package init flag");
+    CJC_ASSERT_WITH_MSG(packageInitLiteralFlag, "unable to find package init literal flag");
+
+    genPackageInitAccessors(packageInitFlag, PatchableName::PackageInitAccessorKind::PACKAGE_INIT);
+    genPackageInitAccessors(packageInitLiteralFlag, PatchableName::PackageInitAccessorKind::PACKAGE_LITERAL_INIT);
 }
 
 void Patcher::patch(const Patchable& patchable)
@@ -36,14 +53,13 @@ void Patcher::patch(const Patchable& patchable)
     if (!guardVarsInitializer) {
         guardVarsInitializer = genGuardVarsInitializer();
         guardClass = genGuardClass();
-        guardVar = genGuardVar(PATCHABLE_GUARD_VAR_NAME, guardClass->GetType(), true);
+        guardVar = genGuardVar(guardClass->GetType(), false);
         guardVar->SetInitFunc(*guardVarsInitializer);
     }
     CJC_ASSERT_WITH_MSG(guardVarsInitializer && guardClass && guardVar,
         "guard var, guard class or guard vars initializer is expected to be generated");
-    const auto guardVarFlag = genGuardVarFlag(patchable.funcName.getGuardVarFlagName());
-    const auto guardMethod = genGuardMethod(
-        guardClass->GetSrcCodeIdentifier() + patchable.funcName.getGuardMethodName(), patchable.func);
+    const auto guardVarFlag = genGuardVarFlag(patchable.funcName.genGuardVarFlagName(false));
+    const auto guardMethod = genGuardMethod(patchable.funcName.genGuardMethodName(PatchableName::GuardMethodKind::PLAIN), patchable.func);
     genGuardChecks(patchable.func, guardVarFlag, guardMethod);
 }
 
@@ -81,7 +97,9 @@ ClassDef* Patcher::genPackageInitGuardClass() const
 #ifdef DEBUG
     std::cout << "Create guard class for package inits" << std::endl;
 #endif
-    const auto cl = builder.CreateClass(INVALID_LOCATION, PACKAGE_INIT_GUARD_CLASS_NAME, PACKAGE_INIT_GUARD_CLASS_NAME,
+    const PatchableName packagePatchableName(package);
+    const auto clName = packagePatchableName.genGuardClassName(true);
+    const auto cl = builder.CreateClass(INVALID_LOCATION, clName, clName,
         package->GetName(), true, false);
     const auto guardClassType = builder.GetType<ClassType>(cl);
     cl->SetType(*guardClassType);
@@ -95,29 +113,12 @@ ClassDef* Patcher::genPackageInitGuardClass() const
     auto defVTable = cl->GetModifiableDefVTable();
 
     const auto genPatchableMethod = [&](const std::string& name) -> void {
-        const auto mt = builder.GetType<FuncType>(paramTypes, builder.GetUnitTy());
-
-        const auto m = builder.CreateFunction(mt, name, name, name, package->GetName(), {});
+        const auto m = createEmptyFunctionWithUnitRetVal(name, paramTypes);
         m->EnableAttr(Attribute::VIRTUAL);
-        m->EnableAttr(Attribute::COMPILER_ADD);
-        m->EnableAttr(Attribute::NO_REFLECT_INFO);
         m->EnableAttr(Attribute::NO_INLINE);
         m->EnableAttr(Attribute::PROTECTED);
-        m->Set<LinkTypeInfo>(Linkage::EXTERNAL);
 
-        for (const auto paramType : paramTypes) {
-            builder.CreateParameter(paramType, INVALID_LOCATION, *m);
-        }
-
-        const auto bg = builder.CreateBlockGroup(*m);
-        m->InitBody(*bg);
-        const auto block = builder.CreateBlock(bg);
-        bg->SetEntryBlock(block);
-
-        const auto retVal = CHIR::CreateAndAppendExpression<Allocate>(builder, INVALID_LOCATION,
-            builder.GetType<RefType>(builder.GetUnitTy()), builder.GetUnitTy(), block)->GetResult();
-        m->SetReturnValue(*retVal);
-
+        const auto block = m->GetEntryBlock();
         genShouldNotReachHere(block);
 
         cl->AddMethod(m);
@@ -128,30 +129,15 @@ ClassDef* Patcher::genPackageInitGuardClass() const
 #endif
     };
 
-    genPatchableMethod(PACKAGE_INIT_GUARD_METHOD_NAME);
-    genPatchableMethod(PACKAGE_LITERAL_INIT_GUARD_METHOD_NAME);
+    genPatchableMethod(packagePatchableName.genGuardMethodName(PatchableName::GuardMethodKind::PACKAGE_INIT));
+    genPatchableMethod(packagePatchableName.genGuardMethodName(PatchableName::GuardMethodKind::PACKAGE_LITERAL_INIT));
 
-    const auto ctorType = builder.GetType<FuncType>(paramTypes, builder.GetUnitTy());
-
-    const auto ctor = builder.CreateFunction(ctorType, "<init>", "init", "<init>", package->GetName(), {});
+    const auto ctorName = packagePatchableName.genGuardMethodName(PatchableName::GuardMethodKind::PACKAGE_INIT_CTOR);
+    const auto ctor = createEmptyFunctionWithUnitRetVal(ctorName, paramTypes);
     ctor->SetFuncKind(CLASS_CONSTRUCTOR);
-    ctor->EnableAttr(Attribute::COMPILER_ADD);
     ctor->EnableAttr(Attribute::PUBLIC);
-    ctor->Set<LinkTypeInfo>(Linkage::EXTERNAL);
 
-    for (const auto paramType : paramTypes) {
-        builder.CreateParameter(paramType, INVALID_LOCATION, *ctor);
-    }
-
-    const auto bg = builder.CreateBlockGroup(*ctor);
-    ctor->InitBody(*bg);
-    const auto block = builder.CreateBlock(bg);
-    bg->SetEntryBlock(block);
-
-    const auto retVal = CHIR::CreateAndAppendExpression<Allocate>(builder, INVALID_LOCATION,
-        builder.GetType<RefType>(builder.GetUnitTy()), builder.GetUnitTy(), block)->GetResult();
-    ctor->SetReturnValue(*retVal);
-
+    const auto block = ctor->GetEntryBlock();
     CHIR::CreateAndAppendTerminator<Exit>(builder, block);
 
     cl->AddMethod(ctor);
@@ -372,6 +358,81 @@ void Patcher::genPackageInitGuardChecks(const Function* patchable, Type* guardCl
 #endif
 }
 
+/**
+   Generate external package getters/setters for package init flags to remove direct flags access in the patch.
+   It removes ambiguity in resolving such flags during interpretation, as ones have the same names throughout different packages.
+
+   CHIR pseudocode:
+
+   func getPackageInitFlag() {
+    [ret] %0: Bool& = Allocate(Bool)
+    %1: Bool = Load(@has_applied_pkg_init_func)
+    %2: Unit = Store(%1, %0)
+    Exit()
+   }
+
+   func setPackageInitFlag(%0: Bool) {
+     [ret] %1: Unit& = Allocate(Unit)
+     %2: Unit = Store(%0, @has_applied_pkg_init_func)
+     %3: Unit = Constant(unit)
+     %4: Unit = Store(%4, %2)
+     Exit()
+   }
+ */
+void Patcher::genPackageInitAccessors(GlobalVar* flag, const PatchableName::PackageInitAccessorKind kind) const
+{
+    const auto packagePatchableName = PatchableName(package);
+
+    {
+        const auto getterName = packagePatchableName.genPackageInitFlagAccessor(kind, true);
+        const std::vector<Type*> paramTypes;
+        const auto accessorType = builder.GetType<FuncType>(paramTypes, builder.GetBoolTy());
+        const auto getter = builder.CreateFunction(accessorType, getterName, getterName, getterName, package->GetName(), {});
+        getter->EnableAttr(Attribute::COMPILER_ADD);
+        getter->EnableAttr(Attribute::NO_REFLECT_INFO);
+        getter->EnableAttr(Attribute::NO_INLINE);
+        getter->Set<LinkTypeInfo>(Linkage::EXTERNAL);
+
+        const auto bg = builder.CreateBlockGroup(*getter);
+        getter->InitBody(*bg);
+        const auto entryBlock = builder.CreateBlock(bg);
+        bg->SetEntryBlock(entryBlock);
+
+        const auto alloc = CHIR::CreateAndAppendExpression<Allocate>(
+            builder, builder.GetType<RefType>(builder.GetBoolTy()), builder.GetBoolTy(), entryBlock);
+        const auto load = CHIR::CreateAndAppendExpression<Load>(builder, builder.GetBoolTy(), flag, entryBlock);
+        CHIR::CreateAndAppendExpression<Store>(
+            builder, builder.GetUnitTy(), load->GetResult(), alloc->GetResult(), entryBlock);
+        CHIR::CreateAndAppendTerminator<Exit>(builder, entryBlock);
+
+        getter->SetReturnValue(*alloc->GetResult());
+
+#ifdef DEBUG
+        std::cout << "getter for package init:" << std::endl << getter->ToString(0) << std::endl;
+#endif
+    }
+
+    {
+        const auto setterName = packagePatchableName.genPackageInitFlagAccessor(kind, false);
+        const std::vector<Type*> paramTypes{builder.GetBoolTy()};
+        const auto setter = createEmptyFunctionWithUnitRetVal(setterName, paramTypes);
+
+        const auto entryBlock = setter->GetEntryBlock();
+
+        CHIR::CreateAndAppendExpression<Store>(
+            builder, builder.GetUnitTy(), GetFuncParams(*entryBlock->GetParentBlockGroup()).front(), flag, entryBlock);
+        const auto unitConst = builder.CreateConstantExpression<UnitLiteral>(builder.GetUnitTy(), entryBlock);
+        entryBlock->AppendExpression(unitConst);
+        CHIR::CreateAndAppendExpression<Store>(
+            builder, builder.GetUnitTy(), unitConst->GetResult(), setter->GetReturnValue(), entryBlock);
+        CHIR::CreateAndAppendTerminator<Exit>(builder, entryBlock);
+
+#ifdef DEBUG
+        std::cout << "setter for package init:" << std::endl << setter->ToString(0) << std::endl;
+#endif
+    }
+}
+
 /*
   CHIR pseudocode:
 
@@ -383,8 +444,8 @@ ClassDef* Patcher::genGuardClass() const
 #ifdef DEBUG
     std::cout << "Create guard class" << std::endl;
 #endif
-    const auto cl = builder.CreateClass(INVALID_LOCATION, PATCHABLE_GUARD_CLASS_NAME,
-        PATCHABLE_GUARD_CLASS_NAME, package->GetName(), true, false);
+    const auto name = PatchableName(package).genGuardClassName(false);
+    const auto cl = builder.CreateClass(INVALID_LOCATION, name, name, package->GetName(), true, false);
     const auto guardClassType = builder.GetType<ClassType>(cl);
     cl->SetType(*guardClassType);
     cl->SetSuperClassTy(*builder.GetObjectTy());
@@ -416,24 +477,10 @@ ClassDef* Patcher::genGuardClass() const
 Function* Patcher::genGuardVarsInitializer() const
 {
     std::vector<Type*> paramTypes;
-    const auto funcType = builder.GetType<FuncType>(paramTypes, builder.GetUnitTy());
-    // TODO mangle?
-    const auto func = builder.CreateFunction(funcType, PATCHABLE_GUARD_VARS_INITIALIZER,
-        PATCHABLE_GUARD_VARS_INITIALIZER, PATCHABLE_GUARD_VARS_INITIALIZER, package->GetName(), {});
-    func->EnableAttr(Attribute::COMPILER_ADD);
-    func->EnableAttr(Attribute::NO_REFLECT_INFO);
-    func->EnableAttr(Attribute::NO_INLINE);
-    func->Set<LinkTypeInfo>(Linkage::EXTERNAL);
+    const auto gviName = PatchableName(package).genGuardVarInitializedName();
+    const auto gvi = createEmptyFunctionWithUnitRetVal(gviName, {});
 
-    const auto bg = builder.CreateBlockGroup(*func);
-    func->InitBody(*bg);
-    const auto entryBlock = builder.CreateBlock(bg);
-    bg->SetEntryBlock(entryBlock);
-
-    const auto retVal = CHIR::CreateAndAppendExpression<Allocate>(builder, INVALID_LOCATION,
-        builder.GetType<RefType>(builder.GetUnitTy()), builder.GetUnitTy(), entryBlock)->GetResult();
-    func->SetReturnValue(*retVal);
-
+    const auto entryBlock = gvi->GetEntryBlock();
     const auto terminator = builder.CreateTerminator<Exit>(entryBlock);
     entryBlock->AppendExpression(terminator);
 
@@ -441,7 +488,7 @@ Function* Patcher::genGuardVarsInitializer() const
     for (const auto block : packageInitBody->GetBlocks()) {
         if (block->TestAttr(Attribute::INITIALIZER)) {
             const auto guardVarsInitializerCall = builder.CreateExpression<Apply>(
-                builder.GetUnitTy(), func, FuncCallContext{
+                builder.GetUnitTy(), gvi, FuncCallContext{
                     .args = {},
                     .instTypeArgs = {},
                     .thisType = nullptr,
@@ -451,7 +498,7 @@ Function* Patcher::genGuardVarsInitializer() const
         }
     }
 
-    return func;
+    return gvi;
 }
 
 /*
@@ -543,19 +590,19 @@ Function* Patcher::genGuardMethod(const std::string& name, const Function* patch
       ...
   }
  */
-GlobalVar* Patcher::genGuardVar(const std::string& name, ClassType* guardClassType, const bool needToInstantiate) const
+GlobalVar* Patcher::genGuardVar(ClassType* guardClassType, const bool forPackageInit) const
 {
+    const auto gvName = PatchableName(package).genGuardVarName(forPackageInit);
 #ifdef DEBUG
-    std::cout << "Gen guard var " << name << " for class " << guardClassType->ToString() << std::endl;
+    std::cout << "Gen guard var " << gvName << " for class " << guardClassType->ToString() << std::endl;
 #endif
     std::vector<Type*> typeArgs;
     typeArgs.emplace_back(builder.GetType<RefType>(guardClassType));
     const auto guardVarType = builder.GetType<EnumType>(pluginCtx->optionDef, typeArgs);
-
-    const auto gv = builder.CreateGlobalVar(builder.GetType<RefType>(guardVarType), name, name, name,
+    const auto gv = builder.CreateGlobalVar(builder.GetType<RefType>(guardVarType), gvName, gvName, gvName,
         package->GetName());
     gv->Set<LinkTypeInfo>(Linkage::EXTERNAL);
-    if (needToInstantiate) {
+    if (!forPackageInit) {
 #ifdef DEBUG
         std::cout << "Instantiate guard var" << std::endl;
 #endif
@@ -804,11 +851,8 @@ void Patcher::genGuardChecks(const Function* const patchable, GlobalVar* guardVa
         }
         paramTypes.emplace_back(guardVarResult->GetType());
 
-        const auto ctorType = builder.GetType<FuncType>(paramTypes, builder.GetUnitTy());
-
-        const auto methodName = PatchableName(modifiedPatchable).getGuardMethodName();
-
-        const auto ctor = builder.CreateFunction(ctorType, methodName, "init", methodName, package->GetName(), {});
+        const auto ctorName = PatchableName(modifiedPatchable).genSyntheticCtorName();
+        const auto ctor =  createEmptyFunctionWithUnitRetVal(ctorName, paramTypes);
         ctor->SetFuncKind(modifiedPatchable->GetFuncKind());
         ctor->EnableAttr(Attribute::COMPILER_ADD);
         ctor->EnableAttr(Attribute::PRIVATE);
@@ -828,18 +872,8 @@ void Patcher::genGuardChecks(const Function* const patchable, GlobalVar* guardVa
             ctor->EnableAttr(Attribute::SKIP_ANALYSIS);
         }
 
-        for (const auto paramType : paramTypes) {
-            builder.CreateParameter(paramType, INVALID_LOCATION, *ctor);
-        }
-
-        const auto ctorBody = builder.CreateBlockGroup(*ctor);
-        ctor->InitBody(*ctorBody);
-        const auto ctorBlock = builder.CreateBlock(ctorBody);
-        ctorBody->SetEntryBlock(ctorBlock);
-
-        const auto retVal = CHIR::CreateAndAppendExpression<Allocate>(builder, INVALID_LOCATION,
-            builder.GetType<RefType>(builder.GetUnitTy()), builder.GetUnitTy(), ctorBlock)->GetResult();
-        ctor->SetReturnValue(*retVal);
+        const auto ctorBody = ctor->GetBody();
+        const auto ctorBlock = ctorBody->GetEntryBlock();
 
         patchable->GetParentCustomTypeDef()->AddMethod(ctor);
 
@@ -965,4 +999,29 @@ void Patcher::genShouldNotReachHere(Block* block) const
         }, block);
 
     CHIR::CreateAndAppendTerminator<RaiseException>(builder, allocException->GetResult(), block);
+}
+
+Function* Patcher::createEmptyFunctionWithUnitRetVal(const std::string& name, std::vector<Type*> paramTypes) const
+{
+    const auto fType = builder.GetType<FuncType>(paramTypes, builder.GetUnitTy());
+    const auto f = builder.CreateFunction(fType, name, name, name, package->GetName(), {});
+    f->EnableAttr(Attribute::COMPILER_ADD);
+    f->EnableAttr(Attribute::NO_REFLECT_INFO);
+    f->EnableAttr(Attribute::NO_INLINE);
+    f->Set<LinkTypeInfo>(Linkage::EXTERNAL);
+
+    for (const auto paramType : paramTypes) {
+        builder.CreateParameter(paramType, INVALID_LOCATION, *f);
+    }
+
+    const auto bg = builder.CreateBlockGroup(*f);
+    f->InitBody(*bg);
+    const auto entryBlock = builder.CreateBlock(bg);
+    bg->SetEntryBlock(entryBlock);
+
+    const auto retVal = CHIR::CreateAndAppendExpression<Allocate>(builder, INVALID_LOCATION,
+        builder.GetType<RefType>(builder.GetUnitTy()), builder.GetUnitTy(), entryBlock)->GetResult();
+    f->SetReturnValue(*retVal);
+
+    return f;
 }
