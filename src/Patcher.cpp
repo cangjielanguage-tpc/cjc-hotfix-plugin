@@ -343,9 +343,9 @@ void Patcher::genPackageInitGuardChecks(const Function* patchable, Type* guardCl
                 .instTypeArgs = {}, // TODO support generics
                 .thisType = guardClassRefType,
             },
-            .virMethodCtx = VirMethodContext{
-                .srcCodeIdentifier = guardMethod->GetSrcCodeIdentifier(),
-                .originalFuncType = guardMethod->GetFuncType(),
+            .virMethodCtx = FuncSigInfo{
+                .funcName = guardMethod->GetSrcCodeIdentifier(),
+                .funcType = guardMethod->GetFuncType(),
                 .genericTypeParams = guardMethod->GetGenericTypeParams(),
             }
         };
@@ -925,9 +925,9 @@ void Patcher::genGuardChecks(const Function* const patchable, GlobalVar* guardVa
                 .instTypeArgs = {}, // TODO support generics
                 .thisType = guardVarBaseType->GetTypeArgs().front(),
             },
-            .virMethodCtx = VirMethodContext{
-                .srcCodeIdentifier = guardMethod->GetSrcCodeIdentifier(),
-                .originalFuncType = funcType,
+            .virMethodCtx = FuncSigInfo{
+                .funcName = guardMethod->GetSrcCodeIdentifier(),
+                .funcType = funcType,
                 .genericTypeParams = guardMethod->GetGenericTypeParams(),
             }
         };
