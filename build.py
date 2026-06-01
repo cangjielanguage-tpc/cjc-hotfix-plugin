@@ -37,6 +37,14 @@ def build(args, project_dir, build_dir):
         f"-DCMAKE_BUILD_TYPE={args.build_type.capitalize()}"
     ]
 
+    if args.run_tests:
+        cmake_cmd.append(f"-DTEST=ON")
+        if args.run_tests == "stub":
+            cmake_cmd.append(f"-DSTUB_TEST=ON")
+        else:
+            cmake_cmd.append(f"-DSTUB_TEST=OFF")
+    else:
+        cmake_cmd.append(f"-DTEST=OFF")
 
     if args.run_tests == "stub":
         cmake_cmd.append(f"-DSTUB_TEST=ON")

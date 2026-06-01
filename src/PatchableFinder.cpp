@@ -11,7 +11,11 @@ namespace HotfixPlugin {
 
 bool matchesRegexpFilter(const std::optional<std::regex>& regexpFilter, const std::string& name)
 {
+#ifdef TEST
     return regexpFilter.has_value() && std::regex_match(name, regexpFilter.value());
+#else
+    return !regexpFilter.has_value() || std::regex_match(name, regexpFilter.value());
+#endif
 }
 
 bool isPatchable(const AnnoInfo& annoInfo)
@@ -37,31 +41,51 @@ std::set<Patchable> findPatchables(const Package& package, const std::optional<s
     const PatchableName packagePatchableName(&package);
     const auto guardVarInitializerName = packagePatchableName.genGuardVarInitializedName();
     const auto packageInitGuardClassName = packagePatchableName.genGuardClassName(true);
+    const auto packageInitFlagGetter =
+        packagePatchableName.genPackageInitFlagAccessor(PatchableName::PackageInitAccessorKind::PACKAGE_INIT, false);
+    const auto packageInitFlagSetter =
+        packagePatchableName.genPackageInitFlagAccessor(PatchableName::PackageInitAccessorKind::PACKAGE_INIT, true);
+    const auto packageLiteralInitFlagGetter = packagePatchableName.genPackageInitFlagAccessor(
+        PatchableName::PackageInitAccessorKind::PACKAGE_LITERAL_INIT, false);
+    const auto packageLiteralInitFlagSetter = packagePatchableName.genPackageInitFlagAccessor(
+    PatchableName::PackageInitAccessorKind::PACKAGE_LITERAL_INIT, true);
     for (const auto func : package.GetGlobalFuncsWithBody()) {
-        const auto funcName = PatchableName(func);
-        const auto funcQualifiedName = funcName.getQualifiedName();
 #if DEBUG
         std::cout << "func: " << func->GetIdentifierWithoutPrefix() << std::endl;
 #endif
 
-        const auto declType = func->GetParentCustomTypeDef();
-
-        const auto funcIdentifier = func->GetSrcCodeIdentifier();
-        if (const auto funcKind = func->GetFuncKind(); func->IsImportedFunc() ||
-            func->TestAttr(Attribute::INITIALIZER) || funcKind == ANNOFACTORY_FUNC ||
-
-            funcIdentifier == Cangjie::MAIN_INVOKE ||
-            funcIdentifier == guardVarInitializerName ||
-            funcIdentifier == packagePatchableName.genPackageInitFlagAccessor(PatchableName::PackageInitAccessorKind::PACKAGE_INIT, false) ||
-            funcIdentifier == packagePatchableName.genPackageInitFlagAccessor(PatchableName::PackageInitAccessorKind::PACKAGE_INIT, true) ||
-            funcIdentifier == packagePatchableName.genPackageInitFlagAccessor(PatchableName::PackageInitAccessorKind::PACKAGE_LITERAL_INIT, false) ||
-            funcIdentifier == packagePatchableName.genPackageInitFlagAccessor(PatchableName::PackageInitAccessorKind::PACKAGE_LITERAL_INIT, true) ||
-
-            declType && declType->GetSrcCodeIdentifier() == packageInitGuardClassName) {
+        // no need to generate guards for imported functions and the functions from another packages
+        // (e.g. belonging to generic instantiated types)
+        if (func->IsImportedFunc() || func->GetPackageName() != package.GetName()) {
             continue;
         }
 
-        if (matches(func->GetAnnoInfo(), regexpFilter, funcQualifiedName) ||
+        // no need to generate guards for initializers and anno factories, as ones are reachable from package inits
+        if (const auto funcKind = func->GetFuncKind();
+            func->TestAttr(Attribute::INITIALIZER) || funcKind == ANNOFACTORY_FUNC) {
+            continue;
+        }
+
+        // no need to generate guards for plugin-generated methods
+        if (const auto funcIdentifier = func->GetSrcCodeIdentifier();
+            funcIdentifier == Cangjie::MAIN_INVOKE ||
+            funcIdentifier == guardVarInitializerName ||
+            funcIdentifier == packageInitFlagGetter ||
+            funcIdentifier == packageInitFlagSetter ||
+            funcIdentifier == packageLiteralInitFlagGetter ||
+            funcIdentifier == packageLiteralInitFlagSetter) {
+            continue;
+        }
+
+        // no need to generate guards for plugin-generated package inits' guard methods
+        const auto declType = func->GetParentCustomTypeDef();
+        if (declType && declType->GetSrcCodeIdentifier() == packageInitGuardClassName) {
+            continue;
+        }
+
+        const auto funcName = PatchableName(func);
+        if (const auto funcQualifiedName = funcName.getQualifiedName();
+            matches(func->GetAnnoInfo(), regexpFilter, funcQualifiedName) ||
             (declType && matches(declType->GetAnnoInfo(), regexpFilter, PatchableName(declType).getQualifiedName()))) {
             const auto [_, added] = result.insert(Patchable{
                 .funcName = funcName,
