@@ -19,7 +19,6 @@ include_directories(
         libs
 )
 
-
 file(GLOB_RECURSE LIB_SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 
 add_library(hotfix-plugin SHARED ${LIB_SOURCES})
@@ -28,6 +27,11 @@ if (CANGJIE_PATH)
     target_link_directories(hotfix-plugin PRIVATE "${CANGJIE_PATH}/tools/lib")
     target_link_libraries(hotfix-plugin PRIVATE "cangjie-lsp")
 endif ()
+
+# ignore specialization of std::remove_pointer for Ptr<T> class inside std namespace (see SafePointer.h)
+target_compile_options(hotfix-plugin PRIVATE
+    $<$<PLATFORM_ID:Darwin>:-Wno-error=invalid-specialization>
+)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Debug build mode")
