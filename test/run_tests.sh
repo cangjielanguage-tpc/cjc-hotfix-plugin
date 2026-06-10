@@ -6,8 +6,6 @@ expected_ext=$1
 build_dir=$2
 cangjie_home=$3
 
-plugin="$build_dir/libhotfix-plugin.so"
-
 envsetup=$cangjie_home/"envsetup.sh"
 
 if [[ ! -f $envsetup ]]; then
@@ -16,6 +14,12 @@ if [[ ! -f $envsetup ]]; then
 fi
 
 source "$envsetup"
+
+if cjc -v | grep -qi "darwin"; then
+  plugin="$build_dir/libhotfix-plugin.dylib"
+else
+  plugin="$build_dir/libhotfix-plugin.so"
+fi
 
 echo "Building patchable hotfix lib"
 cd lib
@@ -32,12 +36,14 @@ for file in *.cj; do
     echo "File to check results: $expected"
     rm -rf *_CHIR
     cjc "$file" "lib/$hotfix_lib" --import-path "lib" --plugin "$plugin" --dump-chir
+    # TODO if macos, should be run on simulator
     actual_data=`./main`
     expected_data=`cat "$expected"`
 
     rm -f *.cjo
     rm -f *.cjo.flag
 
+    # TODO -Z, -u are not supported on macos
     if diff -Z -u <(echo "$actual_data") <(echo "$expected_data"); then
       echo "Passed"
     else
