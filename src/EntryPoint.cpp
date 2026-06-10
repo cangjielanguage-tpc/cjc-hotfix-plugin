@@ -3,7 +3,7 @@
 #include "cangjie/CHIR/IR/CHIRBuilder.h"
 #include "cangjie/CHIR/IR/Package.h"
 #include "cangjie/CHIR/Serializer/CHIRSerializer.h"
-#include "cangjie/MetaTransformation/MetaTransform.h"
+#include "cangjie/CHIR/Transformation/MetaTransform.h"
 #ifdef STUB_TEST
 #include "PatcherStub.h"
 #endif
@@ -32,10 +32,6 @@ public:
 #ifdef DEBUG
         std::cout << "Running Hotfix plugin for package " << package.GetName() << std::endl;
 #endif
-        // IR checks are disabled in release mode as compiler tries to check abstract methods offsets before
-        // Canonicalization and VTable generation. That seems buggy.
-        builder.DisableIRCheckerAfterPlugin();
-
         auto patcher = Patcher(builder, pluginContext);
         const auto& patchables = findPatchables(package, tomlFilter);
         for (const auto& patchable : patchables) {
