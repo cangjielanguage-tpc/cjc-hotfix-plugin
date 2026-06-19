@@ -12,6 +12,8 @@ public:
 
     void patch(const Patchable& patchable);
 
+    void genPatchClass() const;
+
 private:
     CHIRBuilder& builder;
     Package* package;
