@@ -128,7 +128,11 @@ void Patcher::genPatchClass() const
         const auto body = builder.CreateBlock(bg);
         bg->SetEntryBlock(body);
 
+#ifdef DEBUG
         genShouldNotReachHere(body);
+#else
+        CHIR::CreateAndAppendTerminator<Exit>(builder, body);
+#endif
         const auto retVal = builder.CreateExpression<Allocate>(
             builder.GetType<RefType>(baseMethodReturnType), baseMethodReturnType, body)->GetResult();
         patchMethod->SetReturnValue(*retVal);
@@ -289,14 +293,13 @@ ClassDef* Patcher::genPackageInitGuardClass() const
         %27: Bool = Constant(false)
         %28: Enum-_CNat6OptionIG_E<Class-$PackageInitPatch&> = Tuple(%27, %25)
         %29: Unit = Store(%28, %19)
+        %30: Unit = Store(%28, @$packageInitPatchVar)
         GoTo(#7)
       Block #7:
-        %30: Enum-_CNat6OptionIG_E<Class-$PackageInitPatch&> = Load(%19)
-        %31: Unit = Store(%30, @$packageInitPatchVar)
-        %32: Enum-_CNat6OptionIG_E<Class-$PackageInitPatch&> = Load(@$packageInitPatchVar)
-        %33: Tuple(Bool,Class-$PackageInitPatch&) = TypeCast(%32)
-        %34: Class-$PackageInitPatch& = Field(%33, 1)
-        %35: Unit = Invoke(ThisType: Class-$PackageInitPatch&, packageInitPatched: (Class-$PackageInitPatch&) -> Unit, %34)
+        %31: Enum-_CNat6OptionIG_E<Class-$PackageInitPatch&> = Load(%19)
+        %32: Tuple(Bool,Class-$PackageInitPatch&) = TypeCast(%31)
+        %33: Class-$PackageInitPatch& = Field(%32, 1)
+        %35: Unit = Invoke(ThisType: Class-$PackageInitPatch&, packageInitPatched: (Class-$PackageInitPatch&) -> Unit, %33)
         Exit()
     }
   }
@@ -388,15 +391,12 @@ void Patcher::genPackageInitGuardChecks(const Function* patchable, Type* guardCl
     CHIR::CreateAndAppendExpression<Store>(builder, builder.GetUnitTy(), tuple->GetResult(),
         guardVarAlloc->GetResult(), guardVarNotInitializedBlock);
 
+    CHIR::CreateAndAppendExpression<Store>(builder, builder.GetUnitTy(), loadGuardVar->GetResult(), guardVar,
+        guardVarNotInitializedBlock);
+
     CHIR::CreateAndAppendTerminator<GoTo>(builder, callPatchBlock, guardVarNotInitializedBlock);
 
     loadGuardVar = CHIR::CreateAndAppendExpression<Load>(builder, guardVarBaseType, guardVarAlloc->GetResult(),
-        callPatchBlock);
-
-    CHIR::CreateAndAppendExpression<Store>(builder, builder.GetUnitTy(), loadGuardVar->GetResult(), guardVar,
-        callPatchBlock);
-
-    loadGuardVar = CHIR::CreateAndAppendExpression<Load>(builder, guardVarBaseType, guardVar,
         callPatchBlock);
 
     const auto tupleType = builder.GetType<TupleType>(std::vector<Type*>{builder.GetBoolTy(), guardClassRefType});
