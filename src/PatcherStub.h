@@ -27,7 +27,7 @@ public:
             preparePackageInits();
         }
         guardClass = findGuardClass(PatchableName(&package).genGuardClassName(false));
-        patchClass = genPatchClass(guardClass);
+        patchClass = findPatchClass(PatchableName(guardClass).genPatchClassName());
         guardVarsInitializer = prepareGuardVarsInitializer();
 
         const auto testFileName = builder.GetChirContext().GetSourceFileName(1);
@@ -133,17 +133,16 @@ public:
         return guardClass;
     }
 
-    ClassDef* genPatchClass(const ClassDef* guardClass) const
+    ClassDef* findPatchClass(const std::string_view name) const
     {
-        const auto patchClassName = PatchableName(guardClass).genPatchClassName();
-        const auto patchClass = builder.CreateClass(INVALID_LOCATION, patchClassName, patchClassName,
-            package.GetName(), true, false);
-        const auto patchClassType = builder.GetType<ClassType>(patchClass);
-        patchClass->SetType(*patchClassType);
-        patchClass->SetSuperClassTy(*guardClass->GetType());
-        patchClass->EnableAttr(Attribute::INTERNAL);
-        patchClass->EnableAttr(Attribute::COMPILER_ADD);
-        patchClass->Set<LinkTypeInfo>(Linkage::EXTERNAL);
+        ClassDef* patchClass = nullptr;
+        for (const auto classDef : package.GetClasses()) {
+            if (classDef->GetSrcCodeIdentifier() == name) {
+                patchClass = classDef;
+                break;
+            }
+        }
+        CJC_ASSERT_WITH_MSG(patchClass, "unable to find patch class");
         return patchClass;
     }
 
@@ -218,8 +217,8 @@ public:
 
     void patch(const Patchable& patchable) const
     {
-        const auto guardMethod = findGuardMethod(patchable.funcName.genGuardMethodName(PatchableName::GuardMethodKind::PLAIN));
-        genPatchMethodStub(guardMethod);
+        const auto guardMethodName = patchable.funcName.genGuardMethodName(PatchableName::GuardMethodKind::PLAIN);
+        genStubCodeForPatchMethod(findPatchMethod(guardMethodName));
         updateGuardVarsInitializer(patchable);
     }
 
@@ -233,34 +232,28 @@ public:
         CJC_ABORT_WITH_MSG("unable to find guard method with name " + name);
     }
 
-    void genPatchMethodStub(const Function* baseMethod) const
+    Function* findPatchMethod(const std::string& name) const
     {
-        const auto baseMethodType = baseMethod->GetFuncType();
-        const auto returnType = baseMethodType->GetReturnType();
-
-        std::vector paramTypes = baseMethodType->GetParamTypes();
-        paramTypes.front() = builder.GetType<RefType>(patchClass->GetType());
-        const auto overriddenMethodType = builder.GetType<FuncType>(paramTypes, returnType);
-
-        const auto methodName = baseMethod->GetSrcCodeIdentifier();
-        const auto overriddenMethod = builder.CreateFunction(overriddenMethodType,
-            methodName, methodName, methodName,
-            package.GetName(), {});
-        overriddenMethod->EnableAttr(Attribute::OVERRIDE);
-        overriddenMethod->EnableAttr(Attribute::PROTECTED);
-        overriddenMethod->Set<LinkTypeInfo>(Linkage::EXTERNAL);
-        for (const auto paramType : paramTypes) {
-            builder.CreateParameter(paramType, INVALID_LOCATION, *overriddenMethod);
+        for (const auto& method : patchClass->GetMethods()) {
+            if (method->GetSrcCodeIdentifier() == name) {
+                return method;
+            }
         }
+        CJC_ABORT_WITH_MSG("unable to find guard method with name " + name);
+    }
 
-        const auto bg = builder.CreateBlockGroup(*overriddenMethod);
-        overriddenMethod->InitBody(*bg);
+    void genStubCodeForPatchMethod(Function* patchMethod) const
+    {
+        const auto patchMethodName = patchMethod->GetSrcCodeIdentifier();
+
+        const auto bg = builder.CreateBlockGroup(*patchMethod);
+        patchMethod->ReplaceBody(*bg);
         const auto body = builder.CreateBlock(bg);
         bg->SetEntryBlock(body);
 
-        if (const auto patchStub = stubsMap.find(methodName); patchStub == stubsMap.end()) {
+        if (const auto patchStub = stubsMap.find(patchMethodName); patchStub == stubsMap.end()) {
 #if DEBUG
-            std::cout << "stub method for " << methodName << " was not found in stub map" << std::endl;
+            std::cout << "stub method for " << patchMethodName << " was not found in stub map" << std::endl;
 #endif
 
             /*
@@ -270,13 +263,13 @@ public:
                  println("Hello from stub")
                }
              */
-            CJC_ASSERT_WITH_MSG(returnType == builder.GetUnitTy(),
+            CJC_ASSERT_WITH_MSG(patchMethod->GetReturnType() == builder.GetUnitTy(),
                 "unable to build stub for the guard method with return type distinct to Unit");
 
             const auto retVal = builder.CreateExpression<Allocate>(INVALID_LOCATION,
                 builder.GetType<RefType>(builder.GetUnitTy()), builder.GetUnitTy(),
                 body)->GetResult();
-            overriddenMethod->SetReturnValue(*retVal);
+            patchMethod->SetReturnValue(*retVal);
 
             const auto terminator = builder.CreateTerminator<Exit>(body);
             body->AppendExpression(terminator);
@@ -296,7 +289,7 @@ public:
         } else {
             // generate stub according to stub.map file
 #if DEBUG
-            std::cout << "search stub code for " << methodName << ": " << patchStub->second << std::endl;
+            std::cout << "search stub code for " << patchMethodName << ": " << patchStub->second << std::endl;
 #endif
             if (const auto patchStubCode = stubCode.find(patchStub->second); patchStubCode == stubCode.end()) {
 #if DEBUG
@@ -329,10 +322,10 @@ public:
                     }
                 }
 
-                overriddenMethod->ReplaceBody(*patchStubCode->second);
+                patchMethod->ReplaceBody(*patchStubCode->second);
 
                 // as a function has a new body, we need to fix param refs
-                const auto parameters = GetFuncParams(*overriddenMethod->GetBody());
+                const auto parameters = GetFuncParams(*patchMethod->GetBody());
                 const auto fixParamsRef = [&](Expression& e) {
                     for (const auto operand : e.GetOperands()) {
                         if (operand->IsParameter()) {
@@ -346,7 +339,7 @@ public:
                     }
                     return VisitResult::CONTINUE;
                 };
-                Visitor::Visit(*overriddenMethod, [](Expression&) {
+                Visitor::Visit(*patchMethod, [](Expression&) {
                     return VisitResult::CONTINUE;
                 }, fixParamsRef);
 
@@ -368,22 +361,22 @@ public:
                 package.SetAllGlobalFuncs(std::move(newGlobalFuncs));
 
                 // regenerate expressions in block to fix identifiers
-                for (const auto block : overriddenMethod->GetBody()->GetBlocks()) {
+                for (const auto block : patchMethod->GetBody()->GetBlocks()) {
                     for (const auto expression : block->GetNonTerminatorExpressions()) {
-                        const auto clonedExpr = expression->Clone(builder, *overriddenMethod->GetEntryBlock());
+                        const auto clonedExpr = expression->Clone(builder, *patchMethod->GetEntryBlock());
                         expression->ReplaceWith(*clonedExpr);
                     }
                 }
 
-                const auto newRetVal = overriddenMethod->GetEntryBlock()->GetExpressions().at(retValIdx)->GetResult();
-                overriddenMethod->SetReturnValue(*newRetVal);
+                const auto newRetVal = patchMethod->GetEntryBlock()->GetExpressions().at(retValIdx)->GetResult();
+                patchMethod->SetReturnValue(*newRetVal);
             }
         }
 #if DEBUG
         std::cout << "patch after replacement:" << std::endl;
-        std::cout << overriddenMethod->ToString(0) << std::endl;
+        std::cout << patchMethod->ToString(0) << std::endl;
 #endif
-        patchClass->AddMethod(overriddenMethod);
+        patchClass->AddMethod(patchMethod);
     }
 
     void updateGuardVarsInitializer(const Patchable& patchable) const

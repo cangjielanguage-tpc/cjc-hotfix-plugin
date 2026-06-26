@@ -62,7 +62,9 @@ std::set<Patchable> findPatchables(const Package& package, const std::optional<s
 
         // no need to generate guards for initializers and anno factories, as ones are reachable from package inits
         if (const auto funcKind = func->GetFuncKind();
-            func->TestAttr(Attribute::INITIALIZER) || funcKind == ANNOFACTORY_FUNC) {
+            func->TestAttr(Attribute::INITIALIZER) || funcKind == ANNOFACTORY_FUNC ||
+            // TODO support ctors for generics structs properly, mut functions
+            funcKind == STRUCT_CONSTRUCTOR || funcKind == PRIMAL_STRUCT_CONSTRUCTOR || func->TestAttr(Attribute::MUT)) {
             continue;
         }
 

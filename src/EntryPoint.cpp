@@ -44,6 +44,7 @@ public:
 #endif
             patcher.patch(patchable);
         }
+        patcher.genPatchClass();
 
 #ifdef STUB_TEST
         const auto patcherStub = PatcherStub(package, builder);
