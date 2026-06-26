@@ -128,11 +128,9 @@ void Patcher::genPatchClass() const
         const auto body = builder.CreateBlock(bg);
         bg->SetEntryBlock(body);
 
-#ifdef DEBUG
+        // TODO figure out, why generation of Exit instead of shouldNotReachHere fails in runtime
         genShouldNotReachHere(body);
-#else
-        CHIR::CreateAndAppendTerminator<Exit>(builder, body);
-#endif
+
         const auto retVal = builder.CreateExpression<Allocate>(
             builder.GetType<RefType>(baseMethodReturnType), baseMethodReturnType, body)->GetResult();
         patchMethod->SetReturnValue(*retVal);
