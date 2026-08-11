@@ -17,6 +17,14 @@
 package hotfixplugin
 
 import std.regex.*
+import std.env.*
+
+private func typeFilterDebug(): Bool {
+    if (let Some(v) <- getVariable("HOTFIX_DEBUG")) {
+        return v != "" && v != "0"
+    }
+    return false
+}
 
 /**
  * Form a regular expression from the input sequence of filter strings.
@@ -61,6 +69,10 @@ func formRegex(filter: Array<String>): ?Regex {
 
     if (filter.size > 1) {
         nameRegexp += ")"
+    }
+
+    if (typeFilterDebug()) {
+        println("Regexp by input filter: " + nameRegexp)
     }
 
     // Anchor to get full-match semantics equivalent to std::regex_match.

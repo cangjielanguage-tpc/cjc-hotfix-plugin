@@ -58,6 +58,10 @@ func findPatchables(pkg: Package, regexpFilter: ?Regex): ArrayList<Patchable> {
     let seen = HashSet<String>()
 
     for (fn in pkg.functions) {
+        if (hotfixDebug()) {
+            println("func: " + fn.identifierWithoutPrefix)
+        }
+
         // Only functions with a body defined in the current package.
         if (fn.body.isNone()) {
             continue
@@ -66,15 +70,12 @@ func findPatchables(pkg: Package, regexpFilter: ?Regex): ArrayList<Patchable> {
             continue
         }
 
-        // No need to generate guards for initializers and anno factories (they
-        // are reachable from package inits), constructors, or mut methods.
-        //
-        // The C++ implementation supports class constructors by marking a
-        // synthetic constructor with the internal SKIP_ANALYSIS attribute. That
-        // attribute is not exposed through the public stdx.chir API used by this
-        // Cangjie port, so class constructors are excluded here as well.
-        if (hasInitializerAttr(fn) || isAnnoFactoryFn(fn) || (isConstructorFn(fn) && !isStubSafeConstructor(fn)) ||
-            isStructConstructorFn(fn) || hasMutAttr(fn)) {
+        // Same filter as C++ PatchableFinder.cpp: initializers, annotation
+        // factories, struct constructors, primary struct constructors and mut
+        // methods are skipped. Class constructors are intentionally not skipped
+        // here; Patcher.genGuardChecks tries the same synthetic-ctor structure
+        // as C++ and documents the remaining stdx.chir API gaps there.
+        if (hasInitializerAttr(fn) || isAnnoFactoryFn(fn) || isStructConstructorFn(fn) || hasMutAttr(fn)) {
             continue
         }
 
@@ -104,23 +105,17 @@ func findPatchables(pkg: Package, regexpFilter: ?Regex): ArrayList<Patchable> {
 
         if (isMatch) {
             let patchable = Patchable(funcName, fn)
-            if (seen.add(patchable.sortKey())) {
+            let added = seen.add(patchable.sortKey())
+            if (hotfixDebug()) {
+                println("added " + added.toString())
+            }
+            if (added) {
                 collected.add(patchable)
             }
         }
     }
 
     return sortPatchables(collected)
-}
-
-private func isStubSafeConstructor(fn: Function): Bool {
-    if (!envSet("HOTFIX_STUB_TEST")) {
-        return false
-    }
-    if (let Some(parent) <- fn.declaredParent) {
-        return parent.instanceVars.isEmpty()
-    }
-    return false
 }
 
 /** Insertion sort using the C++ operator< total order (small lists). */

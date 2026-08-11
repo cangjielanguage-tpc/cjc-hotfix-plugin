@@ -27,6 +27,16 @@ class PatcherStub {
     init(pkg: Package) {
         this.pkg = pkg
         this.stubsMap = readStubMaps()
+        if (hotfixDebug()) {
+            println("")
+            println("")
+            println("")
+            if (this.stubsMap.isEmpty()) {
+                println("stub map file is empty")
+            } else {
+                println("found patched stub map file")
+            }
+        }
         this.printlnStringFunc = findStubPrintlnStringFunc(pkg)
         let gcOpt = findOptionalStubClass(pkg, PatchableName(pkg).genGuardClassName(false))
         if (gcOpt.isNone()) {
@@ -67,15 +77,31 @@ class PatcherStub {
 
     private func genMappedStubCodeForPatchMethod(patchMethod: Function, patchMethodName: String): Unit {
         let stubName = stubsMap[patchMethodName]
+        if (hotfixDebug()) {
+            println("search stub code for " + patchMethodName + ": " + stubName)
+        }
         let stubFn = findMappedStubFunction(pkg, stubName)
         if (stubFn.body.isNone()) {
             throw Exception("mapped stub has no body " + stubName)
         }
         if (!patchMethod.funcType.returnType.isUnitType()) {
+            // C++ PatcherStub replaces the body, fixes parameter references,
+            // removes the source stub function/method and resets the return
+            // value. The public stdx.chir API only exposes moveBodyTo(), which
+            // is safe for the Unit-returning mapped stubs currently reachable
+            // by the tests. Keep this failure explicit for non-Unit stubs.
             throw Exception("mapped stub body transplant is not available through public stdx.chir API for " +
                 patchMethodName)
         }
+        if (hotfixDebug()) {
+            println("found:")
+            println(stubFn.toString())
+        }
         stubFn.moveBodyTo(patchMethod)
+        if (hotfixDebug()) {
+            println("patch after replacement:")
+            println(patchMethod.toString())
+        }
     }
 
     private func findPatchMethod(name: String): Function {
@@ -149,9 +175,16 @@ class PatcherStub {
         let b = CHIRBuilder(InsertPosition.Before(term))
         let trueExpr = b.createConstant(BoolLiteral.get(true))
         b.createStore(trueExpr.result, guardVarFlag)
+        if (hotfixDebug()) {
+            println("guardVarsInit after update:")
+            println(entry.toString())
+        }
     }
 
     private func genDefaultStubCodeForPatchMethod(patchMethod: Function): Unit {
+        if (hotfixDebug()) {
+            println("stub method for " + patchMethod.srcCodeName + " was not found in stub map")
+        }
         if (!patchMethod.funcType.returnType.isUnitType()) {
             throw Exception("default stub only supports Unit-returning patch methods")
         }
@@ -168,6 +201,10 @@ class PatcherStub {
         let hello = b.createConstant(StringLiteral.get(stringType(), "Hello from stub"))
         b.createApply(printlnStringFunc, FuncCallContext([hello.result], Array<Type>(), None))
         b.createExit()
+        if (hotfixDebug()) {
+            println("patch after replacement:")
+            println(patchMethod.toString())
+        }
     }
 }
 

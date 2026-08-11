@@ -262,6 +262,11 @@ func isConstructorFn(fn: Function): Bool {
 
 /** True if `fn` is a struct constructor (primary or not) — C++ STRUCT/PRIMAL. */
 func isStructConstructorFn(fn: Function): Bool {
+    if (fn.srcCodeName == "init") {
+        if (let Some(parent) <- fn.declaredParent) {
+            return parent.isStruct()
+        }
+    }
     let k = funcKindStr(fn)
     return k == "StructConstructor" || k == "PrimaryStructConstructor"
 }

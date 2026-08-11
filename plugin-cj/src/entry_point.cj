@@ -47,6 +47,9 @@ public class EntryPoint <: CHIRPluginBase {
         if (envSet("HOTFIX_NOOP")) {
             return true
         }
+        if (hotfixDebug()) {
+            println("Running Hotfix plugin for package " + pkg.name)
+        }
         let pluginContext = createPluginContext(pkg)
         let tomlFilter = formFilterByTomlDirective()
 
@@ -54,7 +57,11 @@ public class EntryPoint <: CHIRPluginBase {
         let patchables = findPatchables(pkg, tomlFilter)
         for (patchable in patchables) {
             if (hotfixDebug()) {
-                println("[hotfix] patchable: " + patchable.funcName.getQualifiedName())
+                println("")
+                println("")
+                println("")
+                println("Found patchable method: " + patchable.funcName.getQualifiedName() + "(" +
+                    patchable.fn.identifierWithoutPrefix + ")")
             }
             patcher.patch(patchable)
         }
@@ -68,6 +75,11 @@ public class EntryPoint <: CHIRPluginBase {
         }
 
         if (hotfixDebug()) {
+            // C++ DEBUG mode serializes the complete package to
+            // `plugin<package>.chir` via CHIRSerializer::Serialize(..., RAW).
+            // The public stdx.chir API currently exposes package text dumps but
+            // not that serializer entry point, so keep the closest observable
+            // debug dump here and document the remaining parity gap.
             println("===== [hotfix] generated classes =====")
             for (c in pkg.classDefs) {
                 if (c.srcCodeName.contains("$")) {
@@ -84,6 +96,10 @@ public class EntryPoint <: CHIRPluginBase {
             for (patchable in patchables) {
                 println(patchable.fn.toString())
             }
+            println("Finished running Hotfix plugin")
+            println("")
+            println("")
+            println("")
         }
         return true
     }
