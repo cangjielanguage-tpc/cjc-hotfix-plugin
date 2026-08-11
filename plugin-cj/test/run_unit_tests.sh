@@ -17,7 +17,7 @@ export LD_LIBRARY_PATH="$CANGJIE_STDX_ROOT/stdx:${LD_LIBRARY_PATH:-}"
 
 cjc "$PLUGIN_ROOT/src/type_filter.cj" "$HERE/unit/type_filter_test.cj" \
     --import-path "$CANGJIE_STDX_ROOT" \
-    -L "$CANGJIE_STDX_ROOT/stdx" -lstdx.chir \
+    -L "$CANGJIE_STDX_ROOT/stdx" -lstdx.chir -lstdx.unittest \
     -o "$PLUGIN_ROOT/output/test/type_filter_test"
 
 "$PLUGIN_ROOT/output/test/type_filter_test"

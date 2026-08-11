@@ -60,6 +60,13 @@ public class EntryPoint <: CHIRPluginBase {
         }
         patcher.genPatchClass()
 
+        if (envSet("HOTFIX_STUB_TEST")) {
+            let patcherStub = PatcherStub(pkg)
+            for (patchable in patchables) {
+                patcherStub.patch(patchable)
+            }
+        }
+
         if (hotfixDebug()) {
             println("===== [hotfix] generated classes =====")
             for (c in pkg.classDefs) {

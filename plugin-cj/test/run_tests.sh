@@ -15,6 +15,12 @@ CANGJIE_STDX_ROOT="${CANGJIE_STDX_ROOT:-/home/s00827109/Projects/cangjie_stdx/ta
 source "$CANGJIE_ENVSETUP"
 
 export LD_LIBRARY_PATH="$PLUGIN_ROOT/output:$CANGJIE_STDX_ROOT/stdx:${LD_LIBRARY_PATH:-}"
+export HOTFIX_TEST_MODE=1
+if [[ "$EXPECTED_EXT" == "expected.stub" ]]; then
+    export HOTFIX_STUB_TEST=1
+else
+    unset HOTFIX_STUB_TEST
+fi
 
 "$PLUGIN_ROOT/build.sh"
 
@@ -56,6 +62,7 @@ for file in "$work_dir"/*.cj; do
     (
         cd "$work_dir"
         rm -rf *_CHIR
+        export HOTFIX_STUB_MAP_FILE="$name.stub.map"
         cjc "$name" "lib/hotfix.a" --import-path "lib" --plugin "$plugin" --dump-chir
         actual_data="$(./main)"
         expected_data="$(cat "$expected")"

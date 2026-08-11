@@ -231,6 +231,10 @@ class Patcher {
         let callContext = InvokeCallContext(caller.result, virMethodCtx, funcCallCtx)
         let callMethod = pb.createInvoke(funcType.returnType, callContext)
 
+        if (isConstructorFn(patchable)) {
+            storeDefaultInstanceFields(pb, patchable.parameters[0])
+        }
+
         let resultType = callMethod.result.ty
         if (resultType.isUnitType()) {
             let unitConst = pb.createConstant(UnitLiteral.get())
@@ -246,6 +250,33 @@ class Patcher {
      */
     func genShouldNotReachHere(block: Block): Unit {
         CHIRBuilder(InsertPosition.AtEnd(block)).createExit()
+    }
+
+    func storeDefaultInstanceFields(b: CHIRBuilder, thisParam: Value): Unit {
+        let thisType = refBaseType(thisParam.ty)
+        let classType = (thisType as ClassLikeType).getOrThrow()
+        for (memberVar in classType.def.instanceVars) {
+            let defaultValue = createDefaultValue(b, memberVar.ty)
+            b.createStoreElementByName(defaultValue, thisParam, ArrayList<String>([memberVar.name]))
+        }
+    }
+
+    func createDefaultValue(b: CHIRBuilder, ty: Type): Value {
+        if (ty.isBoolType()) {
+            return b.createConstant(BoolLiteral.get(false)).result
+        }
+        if (ty.isIntType()) {
+            let intTy = (ty as IntType).getOrThrow()
+            return b.createConstant(IntLiteral.get(intTy, UInt64(0))).result
+        }
+        if (ty.isFloatType()) {
+            let floatTy = (ty as FloatType).getOrThrow()
+            return b.createConstant(FloatLiteral.get(floatTy, 0.0)).result
+        }
+        if (ty == pluginCtx.stringType) {
+            return b.createConstant(StringLiteral.get(pluginCtx.stringType, "")).result
+        }
+        throw Exception("unsupported default constructor stub field type: " + ty.toString())
     }
 
     func createEmptyFunctionWithUnitRetVal(name: String, paramTypes: Array<Type>): Function {

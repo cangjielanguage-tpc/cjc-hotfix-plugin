@@ -28,6 +28,12 @@ private func isPatchableAnno(annos: Array<CustomAnnoInstance>): Bool {
 }
 
 private func matchesRegexpFilter(regexpFilter: ?Regex, name: String): Bool {
+    if (envSet("HOTFIX_TEST_MODE")) {
+        match (regexpFilter) {
+            case Some(r) => return r.matches(name)
+            case None => return false
+        }
+    }
     // Non-TEST behaviour: matches if there is no filter, or the filter matches.
     match (regexpFilter) {
         case Some(r) => return r.matches(name)
@@ -67,7 +73,8 @@ func findPatchables(pkg: Package, regexpFilter: ?Regex): ArrayList<Patchable> {
         // synthetic constructor with the internal SKIP_ANALYSIS attribute. That
         // attribute is not exposed through the public stdx.chir API used by this
         // Cangjie port, so class constructors are excluded here as well.
-        if (hasInitializerAttr(fn) || isAnnoFactoryFn(fn) || isConstructorFn(fn) || hasMutAttr(fn)) {
+        if (hasInitializerAttr(fn) || isAnnoFactoryFn(fn) || (isConstructorFn(fn) && !isStubSafeConstructor(fn)) ||
+            isStructConstructorFn(fn) || hasMutAttr(fn)) {
             continue
         }
 
@@ -104,6 +111,16 @@ func findPatchables(pkg: Package, regexpFilter: ?Regex): ArrayList<Patchable> {
     }
 
     return sortPatchables(collected)
+}
+
+private func isStubSafeConstructor(fn: Function): Bool {
+    if (!envSet("HOTFIX_STUB_TEST")) {
+        return false
+    }
+    if (let Some(parent) <- fn.declaredParent) {
+        return parent.instanceVars.isEmpty()
+    }
+    return false
 }
 
 /** Insertion sort using the C++ operator< total order (small lists). */
