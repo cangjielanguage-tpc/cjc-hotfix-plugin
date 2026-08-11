@@ -134,7 +134,7 @@ def test_matches_filter(test_file: Path, filter_tests: set[str] | None) -> bool:
 
 
 def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str, filter_tests: set[str] | None, env):
-    test_data_dir = project_dir / "test" / "test_data"
+    test_data_dir = project_dir / "test" / "functional"
     test_env = env.copy()
     test_env["HOTFIX_TEST_MODE"] = "1"
     if run_tests_mode == "stub":

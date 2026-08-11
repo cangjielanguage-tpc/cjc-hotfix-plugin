@@ -5,3 +5,5 @@ compile_commands.json
 *.chirtxt
 *.a
 *.cjo
+*_CHIR
+
