@@ -86,8 +86,20 @@ private func dumpSerializedPackage(pkg: Package): Unit {
     let serialized = serializePackage(pkg)
     let data = serialized[0]
     let size = serialized[1]
-    let bytes = Array<Byte>(size, {i => unsafe { data.read(i) }})
-    File.writeTo("plugin" + pkg.name + ".chir", bytes)
+    let chunkSize: Int64 = 64 * 1024
+    try (out = File("plugin" + pkg.name + ".chir", OpenMode.Write)) {
+        var offset: Int64 = 0
+        while (offset < size) {
+            let currentSize = if (size - offset < chunkSize) { size - offset } else { chunkSize }
+            let chunkStart = offset
+            let chunk = Array<Byte>(currentSize, {i => unsafe { data.read(chunkStart + i) }})
+            out.write(chunk)
+            offset += currentSize
+        }
+    }
+    unsafe {
+        freeSerializedMemory()
+    }
 }
 
 /**
