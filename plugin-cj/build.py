@@ -121,7 +121,19 @@ def cleanup_functional_test_outputs(test_data_dir: Path):
             path.unlink()
 
 
-def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str, env):
+def parse_filter_tests(filter_tests: str | None) -> set[str] | None:
+    if not filter_tests:
+        return None
+    return {test.strip() for test in filter_tests.split(",") if test.strip()}
+
+
+def test_matches_filter(test_file: Path, filter_tests: set[str] | None) -> bool:
+    if filter_tests is None:
+        return True
+    return test_file.name in filter_tests or test_file.stem in filter_tests
+
+
+def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str, filter_tests: set[str] | None, env):
     test_data_dir = project_dir / "test" / "test_data"
     test_env = env.copy()
     test_env["HOTFIX_TEST_MODE"] = "1"
@@ -138,7 +150,17 @@ def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str
                 cwd=test_data_dir / "lib", env=test_env)
 
     plugin = plugin_path(build_dir, test_env)
-    for test_file in sorted(test_data_dir.glob("*.cj")):
+    all_test_files = sorted(test_data_dir.glob("*.cj"))
+    if filter_tests:
+        available_tests = {test_file.name for test_file in all_test_files} | {test_file.stem for test_file in all_test_files}
+        missing_tests = filter_tests - available_tests
+        if missing_tests:
+            print(f"Fail. Unknown tests in --filter-tests: {','.join(sorted(missing_tests))}")
+            sys.exit(1)
+
+    test_files = [test_file for test_file in all_test_files if test_matches_filter(test_file, filter_tests)]
+
+    for test_file in test_files:
         print(f"Test file: {test_file.name}")
         expected_files = sorted(test_data_dir.rglob(f"{test_file.name}.{expected_ext}"))
         if not expected_files:
@@ -219,7 +241,7 @@ def build(args, project_dir: Path, build_dir: Path):
         print(f"Running functional tests in {args.run_tests} mode")
         print("------------------------------------------------")
 
-        run_functional_tests(project_dir, build_dir, args.run_tests, env)
+        run_functional_tests(project_dir, build_dir, args.run_tests, parse_filter_tests(args.filter_tests), env)
 
 
 def main():
@@ -245,6 +267,10 @@ def main():
         choices=["normal", "stub"],
         help="Run unit tests and selected functional tests after build",
     )
+    build_parser.add_argument(
+        "--filter-tests",
+        help="Comma-separated functional test names to run; requires --run-tests",
+    )
     build_parser.add_argument("-j", "--jobs",
                               type=int,
                               default=multiprocessing.cpu_count(),
@@ -255,6 +281,9 @@ def main():
     args = parser.parse_args()
     project_dir = Path(__file__).parent.resolve()
     build_dir = project_dir / "output"
+
+    if args.command == "build" and args.filter_tests and not args.run_tests:
+        parser.error("--filter-tests requires --run-tests")
 
     if args.command == "clean":
         clean(build_dir)
