@@ -23,6 +23,15 @@ def run_envsetup_command(command: list[str], cangjie_envsetup: Path, cwd=None, e
     run_command(["bash", "-lc", shell_command], cwd=cwd, env=env)
 
 
+def cjc_is_darwin(cangjie_envsetup: Path, env) -> bool:
+    shell_command = f"source {shlex.quote(str(cangjie_envsetup))} && cjc -v"
+    result = subprocess.run(["bash", "-lc", shell_command], check=True, capture_output=True, text=True, env=env)
+    return "darwin" in (result.stdout + result.stderr).lower()
+
+def plugin_path(build_dir: Path, cangjie_envsetup: Path, env) -> Path:
+    suffix = ".dylib" if cjc_is_darwin(cangjie_envsetup, env) else ".so"
+    return build_dir / ("libhotfix-plugin" + suffix)
+
 def clean(build_dir: Path):
     if build_dir.exists():
         print(f"Cleaning {build_dir}...")
@@ -31,15 +40,17 @@ def clean(build_dir: Path):
         print("Nothing to clean.")
 
 
-def build_plugin(project_dir: Path, build_dir: Path, cangjie_envsetup: Path, cangjie_stdx_root: Path, env):
+def build_plugin(project_dir: Path, build_dir: Path, cangjie_envsetup: Path, cangjie_stdx_root: Path, args, env):
     build_dir.mkdir(parents=True, exist_ok=True)
-    plugin = build_dir / "libhotfix-plugin-cj.so"
+    plugin = plugin_path(build_dir, cangjie_envsetup, env)
 
     # Difference from the C++ build.py: the source plugin is a CMake target,
     # while plugin-cj is itself Cangjie source. Build it directly with cjc here
     # instead of delegating to another .sh file.
     run_envsetup_command([
         "cjc",
+        "-O2",
+        "-j", args.jobs,
         "--output-type=dylib",
         "-p", project_dir / "src",
         "--import-path", cangjie_stdx_root,
@@ -88,8 +99,15 @@ def build(args, project_dir: Path, build_dir: Path):
 
     env["CANGJIE_STDX_ROOT"] = str(cangjie_stdx_root)
     env["LD_LIBRARY_PATH"] = f"{build_dir}:{cangjie_stdx_root / 'stdx'}:{env.get('LD_LIBRARY_PATH', '')}"
+    if args.build_type == "debug":
+        # C++ Debug builds enable the DEBUG preprocessor path. plugin-cj uses
+        # the runtime HOTFIX_DEBUG switch for the same diagnostic behavior, so
+        # make build type control it here.
+        env["HOTFIX_DEBUG"] = "1"
+    else:
+        env.pop("HOTFIX_DEBUG", None)
 
-    build_plugin(project_dir, build_dir, cangjie_envsetup, cangjie_stdx_root, env)
+    build_plugin(project_dir, build_dir, cangjie_envsetup, cangjie_stdx_root, args, env)
 
     if args.run_tests:
         print("------------------------------------------------")
@@ -105,7 +123,7 @@ def build(args, project_dir: Path, build_dir: Path):
         run_command([
             str(project_dir / "test" / "run_tests.sh"),
             ext,
-            str(build_dir),
+            str(plugin_path(build_dir, cangjie_envsetup, env)),
             str(toolchain),
         ], cwd=project_dir / "test" / "test_data", env=env)
 
@@ -122,7 +140,7 @@ def main():
     build_parser.add_argument("-t", "--build-type",
                               choices=["debug", "release"],
                               default="debug",
-                              help="Build configuration (accepted for source build.py compatibility)")
+                              help="Build configuration (default: debug)")
     build_parser.add_argument(
         "--cangjie-stdx-root",
         help="Path to built stdx dynamic root; defaults to build.sh CANGJIE_STDX_ROOT",
@@ -135,7 +153,7 @@ def main():
     build_parser.add_argument("-j", "--jobs",
                               type=int,
                               default=multiprocessing.cpu_count(),
-                              help=f"Number of parallel jobs (accepted for source build.py compatibility; plugin-cj build is single cjc invocation)")
+                              help=f"Number of parallel jobs (default: {multiprocessing.cpu_count()})")
 
     subparsers.add_parser("clean", help="clean build artifacts")
 

@@ -44,9 +44,6 @@ public class EntryPoint <: CHIRPluginBase {
     }
 
     public override func run(pkg: Package): Bool {
-        if (envSet("HOTFIX_NOOP")) {
-            return true
-        }
         if (hotfixDebug()) {
             println("Running Hotfix plugin for package " + pkg.name)
         }
@@ -80,6 +77,7 @@ public class EntryPoint <: CHIRPluginBase {
             // The public stdx.chir API currently exposes package text dumps but
             // not that serializer entry point, so keep the closest observable
             // debug dump here and document the remaining parity gap.
+            /*
             println("===== [hotfix] generated classes =====")
             for (c in pkg.classDefs) {
                 if (c.srcCodeName.contains("$")) {
@@ -95,7 +93,7 @@ public class EntryPoint <: CHIRPluginBase {
             println("===== [hotfix] patched functions =====")
             for (patchable in patchables) {
                 println(patchable.fn.toString())
-            }
+            }*/
             println("Finished running Hotfix plugin")
             println("")
             println("")

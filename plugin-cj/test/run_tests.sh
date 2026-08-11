@@ -3,7 +3,7 @@
 set -e
 
 expected_ext=$1
-build_dir=$2
+plugin=$2
 cangjie_home=$3
 
 envsetup=$cangjie_home/"envsetup.sh"
@@ -21,12 +21,6 @@ if [[ "$expected_ext" == "expected.stub" ]]; then
   export HOTFIX_STUB_TEST=1
 else
   unset HOTFIX_STUB_TEST
-fi
-
-if cjc -v | grep -qi "darwin"; then
-  plugin="$build_dir/libhotfix-plugin-cj.dylib"
-else
-  plugin="$build_dir/libhotfix-plugin-cj.so"
 fi
 
 echo "Building patchable hotfix lib"
