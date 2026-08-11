@@ -252,6 +252,9 @@ func hasAttrToken(fn: Function, token: String): Bool {
 
 /** True if `fn` is any kind of constructor. */
 func isConstructorFn(fn: Function): Bool {
+    if (fn.srcCodeName == "init" && fn.declaredParent.isSome()) {
+        return true
+    }
     let k = funcKindStr(fn)
     return k == "ClassConstructor" || k == "PrimaryClassConstructor" || k == "StructConstructor" ||
         k == "PrimaryStructConstructor"

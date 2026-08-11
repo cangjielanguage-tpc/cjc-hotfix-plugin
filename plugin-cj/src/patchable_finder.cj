@@ -61,10 +61,13 @@ func findPatchables(pkg: Package, regexpFilter: ?Regex): ArrayList<Patchable> {
         }
 
         // No need to generate guards for initializers and anno factories (they
-        // are reachable from package inits), struct constructors, or mut methods
-        // (TODO in the original). Detected via the function header (see
-        // plugin_context.cj), mirroring the C++ TestAttr/GetFuncKind checks.
-        if (hasInitializerAttr(fn) || isAnnoFactoryFn(fn) || isStructConstructorFn(fn) || hasMutAttr(fn)) {
+        // are reachable from package inits), constructors, or mut methods.
+        //
+        // The C++ implementation supports class constructors by marking a
+        // synthetic constructor with the internal SKIP_ANALYSIS attribute. That
+        // attribute is not exposed through the public stdx.chir API used by this
+        // Cangjie port, so class constructors are excluded here as well.
+        if (hasInitializerAttr(fn) || isAnnoFactoryFn(fn) || isConstructorFn(fn) || hasMutAttr(fn)) {
             continue
         }
 

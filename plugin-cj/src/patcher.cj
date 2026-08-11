@@ -157,6 +157,7 @@ class Patcher {
         let gv = pkg.addGlobalVar(RefType.get(guardVarType), gvName, gvName, pkg.name)
 
         if (!forPackageInit) {
+            gv.setInitializer(guardVarsInitializer.getOrThrow())
             let bg = guardVarsInitializer.getOrThrow().body.getOrThrow()
             let body = bg.entryBlock
             let term = lastExpr(body)
@@ -220,7 +221,7 @@ class Patcher {
         let optionType = TupleType.get([BoolType.get(), classRefType])
 
         let pb = CHIRBuilder(InsertPosition.AtEnd(callPatchBlock))
-        let typeCast = pb.createCastToConcrete(guardVarResult, optionType)
+        let typeCast = pb.createNumericCast(guardVarResult, optionType, OverflowStrategy.Throwing)
         let caller = pb.createField(typeCast.result, pathOf(1))
 
         let funcType = guardMethod.funcType
@@ -244,17 +245,7 @@ class Patcher {
      * Block: raise Exception("should not reach here").
      */
     func genShouldNotReachHere(block: Block): Unit {
-        let b = CHIRBuilder(InsertPosition.AtEnd(block))
-        let errMsg = b.createConstant(StringLiteral.get(pluginCtx.stringType, "should not reach here"))
-
-        let exceptionType = pluginCtx.exceptionDef.classType
-        let exceptionRefType = RefType.get(exceptionType)
-        let allocException = b.createAllocate(exceptionType)
-
-        let ctx = FuncCallContext([allocException.result, errMsg.result], Array<Type>(), exceptionRefType)
-        b.createApply(pluginCtx.exceptionInitDef, ctx)
-
-        b.createRaiseException(allocException.result)
+        CHIRBuilder(InsertPosition.AtEnd(block)).createExit()
     }
 
     func createEmptyFunctionWithUnitRetVal(name: String, paramTypes: Array<Type>): Function {
