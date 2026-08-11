@@ -72,28 +72,7 @@ public class EntryPoint <: CHIRPluginBase {
         }
 
         if (hotfixDebug()) {
-            // C++ DEBUG mode serializes the complete package to
-            // `plugin<package>.chir` via CHIRSerializer::Serialize(..., RAW).
-            // The public stdx.chir API currently exposes package text dumps but
-            // not that serializer entry point, so keep the closest observable
-            // debug dump here and document the remaining parity gap.
-            /*
-            println("===== [hotfix] generated classes =====")
-            for (c in pkg.classDefs) {
-                if (c.srcCodeName.contains("$")) {
-                    println(c.toString())
-                }
-            }
-            println("===== [hotfix] generated global vars =====")
-            for (v in pkg.globalVars) {
-                if (v.srcCodeName.contains("$")) {
-                    println(v.toString())
-                }
-            }
-            println("===== [hotfix] patched functions =====")
-            for (patchable in patchables) {
-                println(patchable.fn.toString())
-            }*/
+            dumpSerializedPackage(pkg)
             println("Finished running Hotfix plugin")
             println("")
             println("")
@@ -101,6 +80,14 @@ public class EntryPoint <: CHIRPluginBase {
         }
         return true
     }
+}
+
+private func dumpSerializedPackage(pkg: Package): Unit {
+    let serialized = serializePackage(pkg)
+    let data = serialized[0]
+    let size = serialized[1]
+    let bytes = Array<Byte>(size, {i => unsafe { data.read(i) }})
+    File.writeTo("plugin" + pkg.name + ".chir", bytes)
 }
 
 /**

@@ -1,5 +1,6 @@
 from pathlib import Path
 import argparse
+import difflib
 import multiprocessing
 import os
 import shutil
@@ -9,6 +10,7 @@ import sys
 
 
 def run_command(command: list[str], cwd=None, env=None):
+    command = [str(part) for part in command]
     try:
         print(command)
         subprocess.run(command, check=True, cwd=cwd, env=env)
@@ -17,19 +19,43 @@ def run_command(command: list[str], cwd=None, env=None):
         sys.exit(e.returncode)
 
 
-def run_envsetup_command(command: list[str], cangjie_envsetup: Path, cwd=None, env=None):
-    quoted_command = " ".join(shlex.quote(str(part)) for part in command)
-    shell_command = f"source {shlex.quote(str(cangjie_envsetup))} && {quoted_command}"
-    run_command(["bash", "-lc", shell_command], cwd=cwd, env=env)
+def run_command_capture(command: list[str], cwd=None, env=None) -> str:
+    command = [str(part) for part in command]
+    try:
+        result = subprocess.run(command, check=True, cwd=cwd, env=env, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        if e.stdout:
+            print(e.stdout, end="")
+        if e.stderr:
+            print(e.stderr, end="", file=sys.stderr)
+        print(f"Error: Command failed with exit code {e.returncode}")
+        sys.exit(e.returncode)
+    return result.stdout
 
 
-def cjc_is_darwin(cangjie_envsetup: Path, env) -> bool:
-    shell_command = f"source {shlex.quote(str(cangjie_envsetup))} && cjc -v"
-    result = subprocess.run(["bash", "-lc", shell_command], check=True, capture_output=True, text=True, env=env)
+def source_envsetup(cangjie_envsetup: Path, env) -> dict[str, str]:
+    shell_command = f"source {shlex.quote(str(cangjie_envsetup))} >/dev/null && env -0"
+    result = subprocess.run(["bash", "-lc", shell_command], capture_output=True, env=env)
+    if result.returncode != 0:
+        print(f"Error: Failed to source {cangjie_envsetup}")
+        if result.stderr:
+            print(result.stderr.decode(errors="replace"), end="")
+        sys.exit(result.returncode)
+
+    sourced_env = env.copy()
+    for item in result.stdout.split(b"\0"):
+        if not item:
+            continue
+        key, value = item.split(b"=", 1)
+        sourced_env[os.fsdecode(key)] = os.fsdecode(value)
+    return sourced_env
+
+def cjc_is_darwin(env) -> bool:
+    result = subprocess.run(["cjc", "-v"], check=True, capture_output=True, text=True, env=env)
     return "darwin" in (result.stdout + result.stderr).lower()
 
-def plugin_path(build_dir: Path, cangjie_envsetup: Path, env) -> Path:
-    suffix = ".dylib" if cjc_is_darwin(cangjie_envsetup, env) else ".so"
+def plugin_path(build_dir: Path, env) -> Path:
+    suffix = ".dylib" if cjc_is_darwin(env) else ".so"
     return build_dir / ("libhotfix-plugin" + suffix)
 
 def clean(build_dir: Path):
@@ -40,14 +66,14 @@ def clean(build_dir: Path):
         print("Nothing to clean.")
 
 
-def build_plugin(project_dir: Path, build_dir: Path, cangjie_envsetup: Path, cangjie_stdx_root: Path, args, env):
+def build_plugin(project_dir: Path, build_dir: Path, cangjie_stdx_root: Path, args, env):
     build_dir.mkdir(parents=True, exist_ok=True)
-    plugin = plugin_path(build_dir, cangjie_envsetup, env)
+    plugin = plugin_path(build_dir, env)
 
     # Difference from the C++ build.py: the source plugin is a CMake target,
     # while plugin-cj is itself Cangjie source. Build it directly with cjc here
     # instead of delegating to another .sh file.
-    run_envsetup_command([
+    run_command([
         "cjc",
         "-O2",
         "-j", args.jobs,
@@ -58,18 +84,18 @@ def build_plugin(project_dir: Path, build_dir: Path, cangjie_envsetup: Path, can
         "-lstdx.chir",
         "-lstdx.plugin.manager",
         "--output", plugin,
-    ], cangjie_envsetup, cwd=project_dir, env=env)
+    ], cwd=project_dir, env=env)
     print(f"Built: {plugin}")
 
 
-def run_unit_tests(project_dir: Path, build_dir: Path, cangjie_envsetup: Path, cangjie_stdx_root: Path, env):
+def run_unit_tests(project_dir: Path, build_dir: Path, cangjie_stdx_root: Path, env):
     test_bin = build_dir / "test" / "type_filter_test"
     test_bin.parent.mkdir(parents=True, exist_ok=True)
 
     # Difference from the C++ build.py: the original unit test is registered in
     # CTest by CMake. plugin-cj has a Cangjie unittest file, so build and run the
     # test binary directly from build.py.
-    run_envsetup_command([
+    run_command([
         "cjc",
         project_dir / "src" / "type_filter.cj",
         project_dir / "test" / "unit" / "type_filter_test.cj",
@@ -78,17 +104,91 @@ def run_unit_tests(project_dir: Path, build_dir: Path, cangjie_envsetup: Path, c
         "-lstdx.chir",
         "-lstdx.unittest",
         "-o", test_bin,
-    ], cangjie_envsetup, cwd=project_dir, env=env)
-    run_envsetup_command([test_bin], cangjie_envsetup, cwd=project_dir, env=env)
+    ], cwd=project_dir, env=env)
+    run_command([test_bin], cwd=project_dir, env=env)
+
+
+def normalize_diff_text(text: str) -> list[str]:
+    return [line.rstrip() for line in text.rstrip("\n").splitlines()]
+
+
+def cleanup_functional_test_outputs(test_data_dir: Path):
+    for path in test_data_dir.glob("*_CHIR"):
+        if path.is_dir():
+            shutil.rmtree(path)
+    for pattern in ("*.cjo", "*.cjo.flag"):
+        for path in test_data_dir.glob(pattern):
+            path.unlink()
+
+
+def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str, env):
+    test_data_dir = project_dir / "test" / "test_data"
+    test_env = env.copy()
+    test_env["HOTFIX_TEST_MODE"] = "1"
+    if run_tests_mode == "stub":
+        test_env["HOTFIX_STUB_TEST"] = "1"
+        expected_ext = "expected.stub"
+    else:
+        test_env.pop("HOTFIX_STUB_TEST", None)
+        expected_ext = "expected"
+
+    print("Building patchable hotfix lib")
+    hotfix_lib = test_data_dir / "lib" / "hotfix.a"
+    run_command(["cjc", "-p", "hotfix", "--output-type=staticlib", "-o", hotfix_lib.name],
+                cwd=test_data_dir / "lib", env=test_env)
+
+    plugin = plugin_path(build_dir, test_env)
+    for test_file in sorted(test_data_dir.glob("*.cj")):
+        print(f"Test file: {test_file.name}")
+        expected_files = sorted(test_data_dir.rglob(f"{test_file.name}.{expected_ext}"))
+        if not expected_files:
+            print(f"Fail. File {test_file.name}.{expected_ext} to check results was not found")
+            sys.exit(1)
+        expected = expected_files[0]
+
+        print(f"File to check results: {expected.relative_to(test_data_dir)}")
+        cleanup_functional_test_outputs(test_data_dir)
+
+        # The public stdx.chir API used by plugin-cj does not expose the source
+        # file lookup used by the C++ plugin, so pass the equivalent map path.
+        test_env["HOTFIX_STUB_MAP_FILE"] = f"{test_file.name}.stub.map"
+
+        run_command([
+            "cjc",
+            test_file.name,
+            "lib/hotfix.a",
+            "--import-path", "lib",
+            "--plugin", plugin,
+            "--dump-chir",
+        ], cwd=test_data_dir, env=test_env)
+
+        actual_data = run_command_capture([test_data_dir / "main"], cwd=test_data_dir, env=test_env)
+        expected_data = expected.read_text()
+        cleanup_functional_test_outputs(test_data_dir)
+
+        actual_lines = normalize_diff_text(actual_data)
+        expected_lines = normalize_diff_text(expected_data)
+        if actual_lines == expected_lines:
+            print("Passed")
+            continue
+
+        print("Failed")
+        for line in difflib.unified_diff(actual_lines, expected_lines, fromfile="actual", tofile="expected", lineterm=""):
+            print(line)
+        print("Expected:")
+        print(expected_data.rstrip("\n"))
+        print("Actual:")
+        print(actual_data.rstrip("\n"))
+        sys.exit(1)
+
+    print("All tests passed")
 
 
 def build(args, project_dir: Path, build_dir: Path):
     env = os.environ.copy()
     toolchain = Path(args.cangjie_toolchain_path).resolve()
     cangjie_envsetup = toolchain / "envsetup.sh"
-    cangjie_stdx_root = Path(args.cangjie_stdx_root).resolve() if args.cangjie_stdx_root else Path(
-        "/home/s00827109/Projects/cangjie_stdx/target/linux_x86_64_cjnative/dynamic"
-    )
+    cangjie_stdx_root = Path(args.cangjie_stdx_root).resolve()
 
     if not cangjie_envsetup.is_file():
         print(f"{toolchain} is not a proper Cangjie toolchain dir.")
@@ -97,7 +197,7 @@ def build(args, project_dir: Path, build_dir: Path):
     print(f"Project directory: {project_dir}")
     print(f"Build directory:   {build_dir}")
 
-    env["CANGJIE_STDX_ROOT"] = str(cangjie_stdx_root)
+    env = source_envsetup(cangjie_envsetup, env)
     env["LD_LIBRARY_PATH"] = f"{build_dir}:{cangjie_stdx_root / 'stdx'}:{env.get('LD_LIBRARY_PATH', '')}"
     if args.build_type == "debug":
         # C++ Debug builds enable the DEBUG preprocessor path. plugin-cj uses
@@ -107,25 +207,19 @@ def build(args, project_dir: Path, build_dir: Path):
     else:
         env.pop("HOTFIX_DEBUG", None)
 
-    build_plugin(project_dir, build_dir, cangjie_envsetup, cangjie_stdx_root, args, env)
+    build_plugin(project_dir, build_dir, cangjie_stdx_root, args, env)
 
     if args.run_tests:
         print("------------------------------------------------")
         print("Running unit tests...")
         print("------------------------------------------------")
-        run_unit_tests(project_dir, build_dir, cangjie_envsetup, cangjie_stdx_root, env)
+        run_unit_tests(project_dir, build_dir, cangjie_stdx_root, env)
 
         print("------------------------------------------------")
         print(f"Running functional tests in {args.run_tests} mode")
         print("------------------------------------------------")
 
-        ext = "expected.stub" if args.run_tests == "stub" else "expected"
-        run_command([
-            str(project_dir / "test" / "run_tests.sh"),
-            ext,
-            str(plugin_path(build_dir, cangjie_envsetup, env)),
-            str(toolchain),
-        ], cwd=project_dir / "test" / "test_data", env=env)
+        run_functional_tests(project_dir, build_dir, args.run_tests, env)
 
 
 def main():
@@ -143,7 +237,8 @@ def main():
                               help="Build configuration (default: debug)")
     build_parser.add_argument(
         "--cangjie-stdx-root",
-        help="Path to built stdx dynamic root; defaults to build.sh CANGJIE_STDX_ROOT",
+        required=True,
+        help="Path to built stdx dynamic root",
     )
     build_parser.add_argument(
         "--run-tests",
