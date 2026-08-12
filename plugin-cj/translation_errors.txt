@@ -1,0 +1,43 @@
+1) should not reach here generation
+
+trying to generate CHIR
+
+    %30: Struct-_CNat6StringE = Constant("should not reach here")
+    %31: Class-_CNat9ExceptionE& = Allocate(Class-_CNat9ExceptionE)
+    %32: Unit = Apply(Class-_CNat9ExceptionE&->@_CNat9Exception6<init>HRNat6StringE, %31, %30)
+    RaiseException(%31)
+
+with code
+
+    /*
+     * Block: raise Exception("should not reach here").
+     */
+    func genShouldNotReachHere(block: Block): Unit {
+        let b = CHIRBuilder(InsertPosition.AtEnd(block))
+        let errMsg = b.createConstant(StringLiteral.get(pluginCtx.stringType, "should not reach here"))
+
+        let exceptionType = pluginCtx.exceptionDef.classType // just take Exception ClassDef
+        let exceptionRefType = RefType.get(exceptionType)
+        let allocException = b.createAllocate(exceptionType)
+
+        b.createApply(pluginCtx.exceptionInitDef,
+            FuncCallContext([allocException.result, errMsg.result], Array<Type>(), exceptionRefType))
+        b.createRaiseException(allocException.result)
+    }
+
+leads to SIGSEGV
+
+2240557 E CJNative Handle signal: 11.
+2240557 E Thread "cjc" catched unhandled SIGSEGV (Segmentation fault) from native frame. signal pc: 0x7049031685d9, addr: 0x100
+2240557 E   #0  0x7049031685d9 in _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE9_M_assignERKS4_ from /lib/x86_64-linux-gnu/libstdc++.so.6
+Error: Command failed with exit code -11
+
+Maybe there is more correct way to generate that.
+Replacing the code above with simple CHIRBuilder(InsertPosition.AtEnd(block)).createExit() starts working.
+Please, check with small sample, whether it works.
+
+2) The list of attributes is not full, FuncKind is not public, no way to update external linkage.
+Please expose them all.
+
+3)
+
