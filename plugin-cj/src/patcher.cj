@@ -36,11 +36,30 @@ class Patcher {
     init(pkg: Package, pluginCtx: PluginContext) {
         this.pkg = pkg
         this.pluginCtx = pluginCtx
-        // C++ Patcher constructs package-init guards here. This CJ port still
-        // lacks the complete package-init path because public stdx.chir does
-        // not expose all operations used by Patcher::genPackageInitGuardChecks
-        // and Patcher::genPackageInitAccessors. Keep this explicit because it
-        // is a functional parity gap, not an intentional behavior change.
+
+        let packageInitGuardClass = genPackageInitGuardClass()
+        let packageInitGuardClassType = packageInitGuardClass.classType
+        let packageInitGuardVar = genGuardVar(packageInitGuardClassType, true)
+        // C++ uses GlobalVar::SetInitFunc(packageInitFunc). Public stdx.chir
+        // exposes the same storage through setInitializer(Value), and Function
+        // is a Value.
+        packageInitGuardVar.setInitializer(pkg.packageInitFunc.getOrThrow())
+        let packageInitGuardVarFlag = genGuardVarFlag(PatchableName(pkg).genGuardVarFlagName(true))
+        let guardClassMethods = packageInitGuardClass.methods
+        if (guardClassMethods.size != 3) {
+            throw Exception("expected package init guard class to have 3 methods")
+        }
+        let guardClassCtor = guardClassMethods[2]
+
+        genPackageInitGuardChecks(pkg.packageInitFunc.getOrThrow(), packageInitGuardClassType, packageInitGuardVar,
+            packageInitGuardVarFlag, guardClassMethods[0], guardClassCtor)
+        genPackageInitGuardChecks(findPackageLiteralInitFunc(pkg), packageInitGuardClassType,
+            packageInitGuardVar, packageInitGuardVarFlag, guardClassMethods[1], guardClassCtor)
+
+        let packageInitFlag = findGlobalVar(pkg, "$has_applied_pkg_init_func")
+        let packageInitLiteralFlag = findGlobalVar(pkg, "has_invoked_pkg_init_literal")
+        genPackageInitAccessors(packageInitFlag, AccPackageInit)
+        genPackageInitAccessors(packageInitLiteralFlag, AccPackageLiteralInit)
     }
 
     func patch(patchable: Patchable): Unit {
@@ -98,6 +117,167 @@ class Patcher {
             genShouldNotReachHere(body)
 
             patch.appendMethod(patchMethod)
+        }
+    }
+
+    /*
+     * Generates:
+     *   open/internal class $PackageInitPatch$GC <: Object {
+     *     protected open func packageInit...() { shouldNotReachHere }
+     *     protected open func packageLiteralInit...() { shouldNotReachHere }
+     *     public init() { Exit }
+     *   }
+     */
+    func genPackageInitGuardClass(): ClassLikeDef {
+        if (hotfixDebug()) {
+            println("Create guard class for package inits")
+        }
+        let packagePatchableName = PatchableName(pkg)
+        let clName = packagePatchableName.genGuardClassName(true)
+        let cl = pkg.addClass(clName, clName, true)
+        cl.superClass = pluginCtx.objectType
+        cl.setOpen(true)
+        cl.setInternal()
+        // C++ also marks this class COMPILER_ADD and external. Public stdx.chir
+        // does not expose those setters.
+
+        let paramTypes = Array<Type>(1, {_ => RefType.get(cl.classType)})
+
+        let genPatchableMethod = {name: String =>
+            let m = createEmptyFunctionWithUnitRetVal(name, paramTypes)
+            m.setOpen(true)
+            m.setProtected()
+            // C++ also sets NO_INLINE.
+            let block = m.body.getOrThrow().entryBlock
+            genShouldNotReachHere(block)
+            cl.appendMethod(m)
+            if (hotfixDebug()) {
+                println("method:")
+                println(m.toString())
+            }
+        }
+
+        genPatchableMethod(packagePatchableName.genGuardMethodName(PackageInit))
+        genPatchableMethod(packagePatchableName.genGuardMethodName(PackageLiteralInit))
+
+        let ctorName = packagePatchableName.genGuardMethodName(PackageInitCtor)
+        let ctor = createEmptyFunctionWithUnitRetVal(ctorName, paramTypes)
+        ctor.setPublic()
+        // C++ sets FuncKind to CLASS_CONSTRUCTOR. Public stdx.chir does not
+        // expose a func-kind setter for plugin code.
+        CHIRBuilder(InsertPosition.AtEnd(ctor.body.getOrThrow().entryBlock)).createExit()
+        cl.appendMethod(ctor)
+
+        if (hotfixDebug()) {
+            println("ctor:")
+            println(ctor.toString())
+            println("result:")
+            println(cl.toString())
+        }
+        return cl
+    }
+
+    /*
+     * Rewrites a package init entry so that, when the package-init guard flag
+     * is enabled, it obtains or creates a $PackageInitPatch$GC instance and
+     * invokes the corresponding virtual guard method instead of running the
+     * original package init body.
+     */
+    func genPackageInitGuardChecks(patchable: Function, guardClassType: ClassLikeType, packageInitGuardVar: GlobalVar,
+        packageInitGuardVarFlag: GlobalVar, guardMethod: Function, guardClassCtor: Function): Unit {
+        if (hotfixDebug()) {
+            println("Gen package init guard check")
+        }
+        let bg = patchable.body.getOrThrow()
+        let oldEntryBlock = bg.entryBlock
+        let newEntryBlock = bg.appendBlock()
+        bg.setEntryBlock(newEntryBlock)
+
+        let guardVarCheckBlock = bg.appendBlock()
+        let eb = CHIRBuilder(InsertPosition.AtEnd(newEntryBlock))
+        let loadGuardVarFlag = eb.createLoad(packageInitGuardVarFlag)
+        let guardVarFlagCond = eb.createUnaryNot(loadGuardVarFlag.result)
+        eb.createBranch(guardVarFlagCond.result, oldEntryBlock, guardVarCheckBlock)
+
+        let guardVarBaseType = refBaseType(packageInitGuardVar.ty) // Option<$PackageInitPatch$GC&>
+
+        let cb = CHIRBuilder(InsertPosition.AtEnd(guardVarCheckBlock))
+        let guardVarAlloc = cb.createAllocate(guardVarBaseType)
+        let loadGuardVar = cb.createLoad(packageInitGuardVar)
+        let field = cb.createField(loadGuardVar.result, pathOf(0))
+        let falseConst = cb.createConstant(BoolLiteral.get(false))
+        let guardVarCheckCond = cb.createBinaryEqual(field.result, falseConst.result)
+
+        let guardVarInitializedBlock = bg.appendBlock()
+        let guardVarNotInitializedBlock = bg.appendBlock()
+        let callPatchBlock = bg.appendBlock()
+        cb.createBranch(guardVarCheckCond.result, guardVarInitializedBlock, guardVarNotInitializedBlock)
+
+        let ib = CHIRBuilder(InsertPosition.AtEnd(guardVarInitializedBlock))
+        ib.createStore(loadGuardVar.result, guardVarAlloc.result)
+        ib.createGoTo(callPatchBlock)
+
+        let guardClassRefType = RefType.get(guardClassType)
+        let nb = CHIRBuilder(InsertPosition.AtEnd(guardVarNotInitializedBlock))
+        let patchAlloc = nb.createAllocate(guardClassType)
+        nb.createApply(guardClassCtor, FuncCallContext([patchAlloc.result], Array<Type>(), guardClassRefType))
+        let newFalseConst = nb.createConstant(BoolLiteral.get(false))
+        let tuple = nb.createTuple([newFalseConst.result, patchAlloc.result])
+        tuple.result.ty = guardVarBaseType
+        nb.createStore(tuple.result, guardVarAlloc.result)
+        nb.createStore(tuple.result, packageInitGuardVar)
+        nb.createGoTo(callPatchBlock)
+
+        let pb = CHIRBuilder(InsertPosition.AtEnd(callPatchBlock))
+        let loadedGuardVar = pb.createLoad(guardVarAlloc.result)
+        let optionType = TupleType.get([BoolType.get(), guardClassRefType])
+        let typeCast = pb.createNumericCast(loadedGuardVar.result, optionType, OverflowStrategy.Throwing)
+        let caller = pb.createField(typeCast.result, pathOf(1))
+        let funcType = guardMethod.funcType
+        let funcCallCtx = FuncCallContext(Array<Value>(), Array<Type>(), guardClassRefType)
+        let virMethodCtx = FuncSigInfo(guardMethod.srcCodeName, funcType, guardMethod.genericTypeParams)
+        let callContext = InvokeCallContext(caller.result, virMethodCtx, funcCallCtx)
+        pb.createInvoke(funcType.returnType, callContext)
+        pb.createExit()
+
+        if (hotfixDebug()) {
+            println(patchable.toString())
+        }
+    }
+
+    /*
+     * Generates external package init flag getter/setter functions.
+     */
+    func genPackageInitAccessors(flag: GlobalVar, kind: PackageInitAccessorKind): Unit {
+        let packagePatchableName = PatchableName(pkg)
+
+        let getterName = packagePatchableName.genPackageInitFlagAccessor(kind, true)
+        let getterType = FuncType.get(Array<Type>(), BoolType.get())
+        let getter = pkg.addFunction(getterType, getterName, getterName, pkg.name)
+        getter.setInternal()
+        getter.initBody()
+        let getterEntry = getter.body.getOrThrow().entryBlock
+        let gb = CHIRBuilder(InsertPosition.AtEnd(getterEntry))
+        let getterRetVal = gb.createAllocate(BoolType.get())
+        getter.returnValue = getterRetVal.result
+        let load = gb.createLoad(flag)
+        gb.createStore(load.result, getterRetVal.result)
+        gb.createExit()
+
+        let setterName = packagePatchableName.genPackageInitFlagAccessor(kind, false)
+        let setter = createEmptyFunctionWithUnitRetVal(setterName, [BoolType.get()])
+        let setterEntry = setter.body.getOrThrow().entryBlock
+        let sb = CHIRBuilder(InsertPosition.AtEnd(setterEntry))
+        sb.createStore(setter.parameters[0], flag)
+        let unitConst = sb.createConstant(UnitLiteral.get())
+        sb.createStore(unitConst.result, setter.returnValue.getOrThrow())
+        sb.createExit()
+
+        if (hotfixDebug()) {
+            println("getter for package init:")
+            println(getter.toString())
+            println("setter for package init:")
+            println(setter.toString())
         }
     }
 
@@ -428,4 +608,22 @@ func refBaseType(t: Type): Type {
         return r.baseType
     }
     return t
+}
+
+func findGlobalVar(pkg: Package, name: String): GlobalVar {
+    for (gv in pkg.globalVars) {
+        if (gv.srcCodeName == name) {
+            return gv
+        }
+    }
+    throw Exception("unable to find global var " + name)
+}
+
+func findPackageLiteralInitFunc(pkg: Package): Function {
+    for (fn in pkg.functions) {
+        if (fn.packageName == pkg.name && fn.srcCodeName.startsWith("_CGP") && fn.srcCodeName.endsWith("ilHv")) {
+            return fn
+        }
+    }
+    throw Exception("unable to find package literal init function")
 }
