@@ -1,6 +1,5 @@
 from pathlib import Path
 import argparse
-import difflib
 import multiprocessing
 import os
 import shutil
@@ -32,6 +31,11 @@ def run_command_capture(command: list[str], cwd=None, env=None) -> str:
         sys.exit(e.returncode)
     return result.stdout
 
+
+def run_command_result(command: list[str], cwd=None, env=None) -> subprocess.CompletedProcess:
+    command = [str(part) for part in command]
+    print(command)
+    return subprocess.run(command, cwd=cwd, env=env, capture_output=True, text=True)
 
 def source_envsetup(cangjie_envsetup: Path, env) -> dict[str, str]:
     shell_command = f"source {shlex.quote(str(cangjie_envsetup))} >/dev/null && env -0"
@@ -88,15 +92,17 @@ def build_plugin(project_dir: Path, build_dir: Path, cangjie_stdx_root: Path, ar
     print(f"Built: {plugin}")
 
 
-def run_unit_tests(project_dir: Path, build_dir: Path, cangjie_stdx_root: Path, env):
+def run_unit_tests(project_dir: Path, build_dir: Path, cangjie_stdx_root: Path, env) -> list[str]:
+    failed_tests: list[str] = []
     test_bin = build_dir / "test" / "type_filter_test"
     test_bin.parent.mkdir(parents=True, exist_ok=True)
 
     # Difference from the C++ build.py: the original unit test is registered in
     # CTest by CMake. plugin-cj has a Cangjie unittest file, so build and run the
     # test binary directly from build.py.
-    run_command([
+    build_result = run_command_result([
         "cjc",
+        "-O2",
         project_dir / "src" / "type_filter.cj",
         project_dir / "test" / "unit" / "type_filter_test.cj",
         "--import-path", cangjie_stdx_root,
@@ -105,7 +111,22 @@ def run_unit_tests(project_dir: Path, build_dir: Path, cangjie_stdx_root: Path, 
         "-lstdx.unittest",
         "-o", test_bin,
     ], cwd=project_dir, env=env)
-    run_command([test_bin], cwd=project_dir, env=env)
+    if build_result.returncode != 0:
+        if build_result.stdout:
+            print(build_result.stdout, end="")
+        if build_result.stderr:
+            print(build_result.stderr, end="", file=sys.stderr)
+        failed_tests.append("unit/type_filter_test.cj (build)")
+        return failed_tests
+
+    run_result = run_command_result([test_bin], cwd=project_dir, env=env)
+    if run_result.stdout:
+        print(run_result.stdout, end="")
+    if run_result.stderr:
+        print(run_result.stderr, end="", file=sys.stderr)
+    if run_result.returncode != 0:
+        failed_tests.append("unit/type_filter_test.cj")
+    return failed_tests
 
 
 def normalize_diff_text(text: str) -> list[str]:
@@ -134,6 +155,7 @@ def test_matches_filter(test_file: Path, filter_tests: set[str] | None) -> bool:
 
 
 def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str, filter_tests: set[str] | None, env):
+    failed_tests: list[str] = []
     test_data_dir = project_dir / "test" / "functional"
     test_env = env.copy()
     test_env["HOTFIX_TEST_MODE"] = "1"
@@ -156,7 +178,7 @@ def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str
         missing_tests = filter_tests - available_tests
         if missing_tests:
             print(f"Fail. Unknown tests in --filter-tests: {','.join(sorted(missing_tests))}")
-            sys.exit(1)
+            return sorted(missing_tests)
 
     test_files = [test_file for test_file in all_test_files if test_matches_filter(test_file, filter_tests)]
 
@@ -165,7 +187,8 @@ def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str
         expected_files = sorted(test_data_dir.rglob(f"{test_file.name}.{expected_ext}"))
         if not expected_files:
             print(f"Fail. File {test_file.name}.{expected_ext} to check results was not found")
-            sys.exit(1)
+            failed_tests.append(test_file.name)
+            continue
         expected = expected_files[0]
 
         print(f"File to check results: {expected.relative_to(test_data_dir)}")
@@ -175,7 +198,7 @@ def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str
         # file lookup used by the C++ plugin, so pass the equivalent map path.
         test_env["HOTFIX_STUB_MAP_FILE"] = f"{test_file.name}.stub.map"
 
-        run_command([
+        compile_result = run_command_result([
             "cjc",
             test_file.name,
             "lib/hotfix.a",
@@ -183,8 +206,27 @@ def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str
             "--plugin", plugin,
             "--dump-chir",
         ], cwd=test_data_dir, env=test_env)
+        if compile_result.stdout:
+            print(compile_result.stdout, end="")
+        if compile_result.stderr:
+            print(compile_result.stderr, end="", file=sys.stderr)
+        if compile_result.returncode != 0:
+            print("Failed")
+            failed_tests.append(test_file.name)
+            cleanup_functional_test_outputs(test_data_dir)
+            continue
 
-        actual_data = run_command_capture([test_data_dir / "main"], cwd=test_data_dir, env=test_env)
+        run_result = run_command_result([test_data_dir / "main"], cwd=test_data_dir, env=test_env)
+        if run_result.stderr:
+            print(run_result.stderr, end="", file=sys.stderr)
+        if run_result.returncode != 0:
+            if run_result.stdout:
+                print(run_result.stdout, end="")
+            print("Failed")
+            failed_tests.append(test_file.name)
+            cleanup_functional_test_outputs(test_data_dir)
+            continue
+        actual_data = run_result.stdout
         expected_data = expected.read_text()
         cleanup_functional_test_outputs(test_data_dir)
 
@@ -195,15 +237,11 @@ def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str
             continue
 
         print("Failed")
-        for line in difflib.unified_diff(actual_lines, expected_lines, fromfile="actual", tofile="expected", lineterm=""):
-            print(line)
-        print("Expected:")
-        print(expected_data.rstrip("\n"))
-        print("Actual:")
-        print(actual_data.rstrip("\n"))
-        sys.exit(1)
+        failed_tests.append(test_file.name)
 
-    print("All tests passed")
+    if not failed_tests:
+        print("All tests passed")
+    return failed_tests
 
 
 def build(args, project_dir: Path, build_dir: Path):
@@ -232,16 +270,22 @@ def build(args, project_dir: Path, build_dir: Path):
     build_plugin(project_dir, build_dir, cangjie_stdx_root, args, env)
 
     if args.run_tests:
+        failed_tests: list[str] = []
         print("------------------------------------------------")
         print("Running unit tests...")
         print("------------------------------------------------")
-        run_unit_tests(project_dir, build_dir, cangjie_stdx_root, env)
+        failed_tests.extend(run_unit_tests(project_dir, build_dir, cangjie_stdx_root, env))
 
         print("------------------------------------------------")
         print(f"Running functional tests in {args.run_tests} mode")
         print("------------------------------------------------")
 
-        run_functional_tests(project_dir, build_dir, args.run_tests, parse_filter_tests(args.filter_tests), env)
+        failed_tests.extend(run_functional_tests(project_dir, build_dir, args.run_tests, parse_filter_tests(args.filter_tests), env))
+        if failed_tests:
+            print("Failed tests:")
+            for test in failed_tests:
+                print(f"  {test}")
+            sys.exit(1)
 
 
 def main():
