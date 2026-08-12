@@ -3,9 +3,77 @@
 
 #include "cangjie/CHIR/IR/CHIRBuilder.h"
 #include <regex>
+#include <sstream>
 
 namespace HotfixPlugin {
 using namespace Cangjie::CHIR;
+
+static std::string ToCjQualifiedName(const Type& type);
+
+static std::string JoinCjQualifiedNames(const std::vector<Type*>& types, const std::string& delimiter)
+{
+    std::stringstream ss;
+    for (size_t i = 0; i < types.size(); ++i) {
+        ss << ToCjQualifiedName(*types[i]);
+        if (i < types.size() - 1) {
+            ss << delimiter;
+        }
+    }
+    return ss.str();
+}
+
+static std::string ToCjQualifiedName(const Type& type)
+{
+    switch (type.GetTypeKind()) {
+        case Type::TYPE_RAWARRAY: {
+            const auto& rawArrayType = static_cast<const RawArrayType&>(type);
+            return "RawArray<" + ToCjQualifiedName(*rawArrayType.GetElementType()) + ">";
+        }
+        case Type::TYPE_REFTYPE: {
+            const auto& refType = static_cast<const RefType&>(type);
+            return ToCjQualifiedName(*refType.GetBaseType());
+        }
+        case Type::TYPE_VARRAY: {
+            const auto& varArrayType = static_cast<const VArrayType&>(type);
+            return "VArray<" + ToCjQualifiedName(*varArrayType.GetElementType()) + "," +
+                std::to_string(varArrayType.GetSize()) + ">";
+        }
+        case Type::TYPE_CPOINTER: {
+            const auto& cPointerType = static_cast<const CPointerType&>(type);
+            return "CPointer<" + ToCjQualifiedName(*cPointerType.GetElementType()) + ">";
+        }
+        case Type::TYPE_TUPLE: {
+            const auto& tupleType = static_cast<const TupleType&>(type);
+            return "Tuple<" + JoinCjQualifiedNames(tupleType.GetElementTypes(), ",") + ">";
+        }
+        case Type::TYPE_STRUCT:
+        case Type::TYPE_ENUM:
+        case Type::TYPE_CLASS: {
+            const auto& customType = static_cast<const CustomType&>(type);
+            const auto def = customType.GetCustomTypeDef();
+            const auto defName = def->GetSrcCodeIdentifier();
+            if (defName.empty()) {
+                return def->GetPackageName() + "." + def->GetIdentifierWithoutPrefix();
+            }
+            return def->GetPackageName() + "." + defName;
+        }
+        case Type::TYPE_FUNC: {
+            const auto& funcType = static_cast<const FuncType&>(type);
+            return "(" + JoinCjQualifiedNames(funcType.GetParamTypes(), ",") + ")->" +
+                ToCjQualifiedName(*funcType.GetReturnType());
+        }
+        case Type::TYPE_GENERIC: {
+            const auto& genericType = static_cast<const GenericType&>(type);
+            return genericType.GetSrcCodeIdentifier();
+        }
+        case Type::TYPE_BOXTYPE: {
+            const auto& boxType = static_cast<const BoxType&>(type);
+            return "Box<" + ToCjQualifiedName(*boxType.GetBaseType()) + ">";
+        }
+        default:
+            return type.ToString();
+    }
+}
 
 /**
  * Represents function/class qualified name.
@@ -221,7 +289,7 @@ private:
             if (nfuncParams > 0) {
                 name += PARAM_START;
                 for (int i = 0; i < nfuncParams; i++) {
-                    name += funcParams[i]->ToSrcCodeString();
+                    name += ToCjQualifiedName(*funcParams[i]);
                     if (i < nfuncParams - 1) {
                         name += AUX_DELIMITER;
                     }
@@ -264,7 +332,7 @@ struct Patchable final {
             const auto firstType = (*it1)->GetType();
             const auto secondType = (*it2)->GetType();
             if (firstType != secondType) {
-                return firstType->ToSrcCodeString() < secondType->ToSrcCodeString();
+                return ToCjQualifiedName(*firstType) < ToCjQualifiedName(*secondType);
             }
         }
 
