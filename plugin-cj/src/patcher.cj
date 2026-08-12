@@ -189,15 +189,33 @@ class Patcher {
             println("Gen package init guard check")
         }
         let bg = patchable.body.getOrThrow()
-        let oldEntryBlock = bg.entryBlock
-        let newEntryBlock = bg.appendBlock()
-        bg.setEntryBlock(newEntryBlock)
+        let entryBlock = bg.entryBlock
+        let oldEntrySuccessors = lastExpr(entryBlock).successors
+        if (oldEntrySuccessors.size != 2) {
+            throw Exception("entry block of package inits is expected to have two successors")
+        }
+        if (entryBlock.predecessors.size != 0) {
+            throw Exception("entry block of package inits is expected to have zero predecessors")
+        }
+
+        // C++ creates a new outer entry block before the old package-init entry:
+        //
+        //   newEntryBlock -> oldEntryBlock
+        //
+        // and then replaces that goto with the packageInitGuardVarFlag check.
+        // Public stdx.chir has only BlockGroup.appendBlock(), so it cannot
+        // insert a block before the current entry in BlockGroup.blocks. To keep
+        // the flag check in the outer/first block, use the existing entry block
+        // as C++'s newEntryBlock and move the original entry contents into an
+        // appended continuation block.
+        let originalEntryBodyBlock = bg.appendBlock()
+        moveBlockExpressions(entryBlock, originalEntryBodyBlock)
 
         let guardVarCheckBlock = bg.appendBlock()
-        let eb = CHIRBuilder(InsertPosition.AtEnd(newEntryBlock))
+        let eb = CHIRBuilder(InsertPosition.AtEnd(entryBlock))
         let loadGuardVarFlag = eb.createLoad(packageInitGuardVarFlag)
         let guardVarFlagCond = eb.createUnaryNot(loadGuardVarFlag.result)
-        eb.createBranch(guardVarFlagCond.result, oldEntryBlock, guardVarCheckBlock)
+        eb.createBranch(guardVarFlagCond.result, originalEntryBodyBlock, guardVarCheckBlock)
 
         let guardVarBaseType = refBaseType(packageInitGuardVar.ty) // Option<$PackageInitPatch$GC&>
 
@@ -225,12 +243,15 @@ class Patcher {
         let tuple = nb.createTuple([newFalseConst.result, patchAlloc.result])
         tuple.result.ty = guardVarBaseType
         nb.createStore(tuple.result, guardVarAlloc.result)
-        nb.createStore(tuple.result, packageInitGuardVar)
+        nb.createStore(loadGuardVar.result, packageInitGuardVar)
         nb.createGoTo(callPatchBlock)
 
         let pb = CHIRBuilder(InsertPosition.AtEnd(callPatchBlock))
         let loadedGuardVar = pb.createLoad(guardVarAlloc.result)
         let optionType = TupleType.get([BoolType.get(), guardClassRefType])
+        // C++ creates a CHIR TypeCast here. Public stdx.chir currently exposes
+        // createNumericCast for plugin code, and this is the available wrapper
+        // used elsewhere in this port for the same Option-enum to Tuple cast.
         let typeCast = pb.createNumericCast(loadedGuardVar.result, optionType, OverflowStrategy.Throwing)
         let caller = pb.createField(typeCast.result, pathOf(1))
         let funcType = guardMethod.funcType
@@ -577,6 +598,19 @@ class Patcher {
 func lastExpr(block: Block): Expression {
     let exprs = block.exprs
     return exprs[exprs.size - 1]
+}
+
+/** Move every expression from one block to another, preserving order. */
+func moveBlockExpressions(from: Block, to: Block): Unit {
+    let anchor = CHIRBuilder(InsertPosition.AtEnd(to)).createConstant(UnitLiteral.get())
+    for (expr in from.exprs) {
+        if (expr.isTerminator()) {
+            expr.moveAfter(anchor)
+        } else {
+            expr.moveBefore(anchor)
+        }
+    }
+    anchor.destroySelf()
 }
 
 /** The single successor of the entry block (the original body block). */
