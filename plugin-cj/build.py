@@ -6,6 +6,9 @@ import shutil
 import subprocess
 import sys
 
+CJPM_MODULE_DIR = "hotfix.plugin"
+CJPM_PACKAGE_NAME = "hotfixplugin"
+
 def run_command(command: list[str], cwd=None, env=None):
     command = [str(part) for part in command]
     try:
@@ -19,6 +22,26 @@ def run_command_result(command: list[str], cwd=None, env=None) -> subprocess.Com
     command = [str(part) for part in command]
     print(command)
     return subprocess.run(command, cwd=cwd, env=env, capture_output=True, text=True)
+
+def require_tool(tool: str, env) -> None:
+    if shutil.which(tool, path=env.get("PATH")) is None:
+        print(f"{tool} is not found in PATH.")
+        sys.exit(1)
+
+def cjpm_module_dir(project_dir: Path) -> Path:
+    return project_dir / CJPM_MODULE_DIR
+
+def cjpm_target_dir(build_dir: Path) -> Path:
+    return build_dir / "cjpm-target"
+
+def cjpm_profile_dir(build_dir: Path, args=None) -> Path:
+    if args is not None and args.build_type == "debug":
+        return cjpm_target_dir(build_dir) / "debug"
+    return cjpm_target_dir(build_dir) / "release"
+
+def cjpm_artifact_path(build_dir: Path, env, args=None) -> Path:
+    suffix = ".dylib" if cjc_is_darwin(env) else ".so"
+    return cjpm_profile_dir(build_dir, args) / CJPM_PACKAGE_NAME / ("lib" + CJPM_PACKAGE_NAME + suffix)
 
 def cjc_is_darwin(env) -> bool:
     result = subprocess.run(["cjc", "-v"], check=True, capture_output=True, text=True, env=env)
@@ -39,62 +62,36 @@ def build_plugin(project_dir: Path, build_dir: Path, cangjie_stdx_path: Path, ar
     build_dir.mkdir(parents=True, exist_ok=True)
     plugin = plugin_path(build_dir, env)
 
-    debug_mode = "true" if args.build_type == "debug" else "false"
-    stub_test = "true" if args.run_tests == "stub" else "false"
-    patch_all = "true" if env.get('PATCH_ALL', 'true') == "true" else "false"
+    module_dir = cjpm_module_dir(project_dir)
+    if not (module_dir / "cjpm.toml").exists():
+        print(f"cjpm module not found: {module_dir}")
+        sys.exit(1)
 
-    run_command([
-        "cjc",
-        "-O2",
-        "-j", "4",
-        "--cfg", f"debug_mode={debug_mode}",
-        "--cfg", f"stub_test={stub_test}",
-        "--cfg", f"patch_all={patch_all}",
-        "--output-type=dylib",
-        "-p", project_dir / "src",
-        "--import-path", cangjie_stdx_path,
-        "-L", cangjie_stdx_path,
-        "-lstdx.chir",
-        "-lstdx.plugin.manager",
-        "--output", plugin,
-        "--dump-chir",
-    ], cwd=project_dir, env=env)
+    command = ["cjpm", "build", "-j", "4", "--target-dir", cjpm_target_dir(build_dir)]
+    if args.build_type == "debug":
+        command.append("-g")
+    run_command(command, cwd=module_dir, env=env)
+
+    artifact = cjpm_artifact_path(build_dir, env, args)
+    if not artifact.exists():
+        print(f"cjpm build finished but artifact was not found: {artifact}")
+        sys.exit(1)
+    shutil.copy2(artifact, plugin)
     print(f"Built: {plugin}")
 
-def run_unit_tests(project_dir: Path, build_dir: Path, cangjie_stdx_path: Path, env) -> list[str]:
+def run_unit_tests(project_dir: Path, build_dir: Path, cangjie_stdx_path: Path, env, args) -> list[str]:
     failed_tests: list[str] = []
-    test_bin = build_dir / "test" / "type_filter_test"
-    test_bin.parent.mkdir(parents=True, exist_ok=True)
-
-    # Difference from the C++ build.py: the original unit test is registered in
-    # CTest by CMake. plugin-cj has a Cangjie unittest file, so build and run the
-    # test binary directly from build.py.
-    build_result = run_command_result([
-        "cjc",
-        "-O2",
-        project_dir / "src" / "type_filter.cj",
-        project_dir / "test" / "unit" / "type_filter_test.cj",
-        "--import-path", cangjie_stdx_path,
-        "-L", cangjie_stdx_path,
-        "-lstdx.chir",
-        "-lstdx.unittest",
-        "-o", test_bin,
-    ], cwd=project_dir, env=env)
-    if build_result.returncode != 0:
-        if build_result.stdout:
-            print(build_result.stdout, end="")
-        if build_result.stderr:
-            print(build_result.stderr, end="", file=sys.stderr)
-        failed_tests.append("unit/type_filter_test.cj (build)")
-        return failed_tests
-
-    run_result = run_command_result([test_bin], cwd=project_dir, env=env)
-    if run_result.stdout:
-        print(run_result.stdout, end="")
-    if run_result.stderr:
-        print(run_result.stderr, end="", file=sys.stderr)
-    if run_result.returncode != 0:
-        failed_tests.append("unit/type_filter_test.cj")
+    module_dir = cjpm_module_dir(project_dir)
+    command = ["cjpm", "test", "-j", "4", "--no-color", "--target-dir", cjpm_target_dir(build_dir)]
+    if args.build_type == "debug":
+        command.append("-g")
+    test_result = run_command_result(command, cwd=module_dir, env=env)
+    if test_result.stdout:
+        print(test_result.stdout, end="")
+    if test_result.stderr:
+        print(test_result.stderr, end="", file=sys.stderr)
+    if test_result.returncode != 0:
+        failed_tests.append("cjpm test")
     return failed_tests
 
 def normalize_diff_text(text: str) -> list[str]:
@@ -209,7 +206,6 @@ def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str
         print("All tests passed")
     return failed_tests
 
-
 def build(args, project_dir: Path, build_dir: Path):
     env = os.environ.copy()
 
@@ -221,11 +217,22 @@ def build(args, project_dir: Path, build_dir: Path):
         print("CANGJIE_STDX_PATH is not set.")
         sys.exit(1)
 
+    require_tool("cjc", env)
+    require_tool("cjpm", env)
+
+    cangjie_stdx_path = Path(env["CANGJIE_STDX_PATH"]).resolve()
+    env["HOTFIX_DEBUG_MODE"] = "true" if args.build_type == "debug" else "false"
+    env["HOTFIX_STUB_TEST"] = "true" if args.run_tests == "stub" else "false"
+    env["HOTFIX_PATCH_ALL"] = "true" if env.get('PATCH_ALL', 'true') == "true" else "false"
+
     print(f"Project directory: {project_dir}")
     print(f"Build directory:   {build_dir}")
+    print(f"cjpm module:       {cjpm_module_dir(project_dir)}")
 
-    cangjie_stdx_path = Path(env.get('CANGJIE_STDX_PATH')).resolve()
-    env["LD_LIBRARY_PATH"] = f"{build_dir}:{cangjie_stdx_path}:{env.get('LD_LIBRARY_PATH', '')}"
+    env["LD_LIBRARY_PATH"] = (
+        f"{build_dir}:{cjpm_artifact_path(build_dir, env, args).parent}:"
+        f"{cangjie_stdx_path}:{env.get('LD_LIBRARY_PATH', '')}"
+    )
 
     build_plugin(project_dir, build_dir, cangjie_stdx_path, args, env)
 
@@ -234,7 +241,7 @@ def build(args, project_dir: Path, build_dir: Path):
         print("------------------------------------------------")
         print("Running unit tests...")
         print("------------------------------------------------")
-        failed_tests.extend(run_unit_tests(project_dir, build_dir, cangjie_stdx_path, env))
+        failed_tests.extend(run_unit_tests(project_dir, build_dir, cangjie_stdx_path, env, args))
 
         print("------------------------------------------------")
         print(f"Running functional tests in {args.run_tests} mode")
