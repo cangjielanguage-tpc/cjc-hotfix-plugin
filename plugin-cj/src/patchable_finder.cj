@@ -58,7 +58,7 @@ func findPatchables(pkg: Package, regexpFilter: ?Regex): ArrayList<Patchable> {
     let seen = HashSet<String>()
 
     for (fn in pkg.functions) {
-        if (hotfixDebug()) {
+        debug { =>
             println("func: " + fn.identifierWithoutPrefix)
         }
 
@@ -106,7 +106,7 @@ func findPatchables(pkg: Package, regexpFilter: ?Regex): ArrayList<Patchable> {
         if (isMatch) {
             let patchable = Patchable(funcName, fn)
             let added = seen.add(patchable.sortKey())
-            if (hotfixDebug()) {
+            debug { =>
                 println("added " + added.toString())
             }
             if (added) {

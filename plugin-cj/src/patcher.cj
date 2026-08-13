@@ -72,9 +72,6 @@ class Patcher {
         }
         let guardVarFlag = genGuardVarFlag(patchable.funcName.genGuardVarFlagName(false))
         let guardMethod = genGuardMethod(patchable.funcName.genGuardMethodName(GuardMethodKind.Plain), patchable.fn)
-        if (envSet("HOTFIX_SKIP_CHECKS")) {
-            return
-        }
         genGuardChecks(patchable.fn, guardVarFlag, guardMethod)
     }
 
@@ -129,7 +126,7 @@ class Patcher {
      *   }
      */
     func genPackageInitGuardClass(): ClassLikeDef {
-        if (hotfixDebug()) {
+        debug { =>
             println("Create guard class for package inits")
         }
         let packagePatchableName = PatchableName(pkg)
@@ -151,7 +148,7 @@ class Patcher {
             let block = m.body.getOrThrow().entryBlock
             genShouldNotReachHere(block)
             cl.appendMethod(m)
-            if (hotfixDebug()) {
+            debug { =>
                 println("method:")
                 println(m.toString())
             }
@@ -168,7 +165,7 @@ class Patcher {
         CHIRBuilder(InsertPosition.AtEnd(ctor.body.getOrThrow().entryBlock)).createExit()
         cl.appendMethod(ctor)
 
-        if (hotfixDebug()) {
+        debug { =>
             println("ctor:")
             println(ctor.toString())
             println("result:")
@@ -185,7 +182,7 @@ class Patcher {
      */
     func genPackageInitGuardChecks(patchable: Function, guardClassType: ClassLikeType, packageInitGuardVar: GlobalVar,
         packageInitGuardVarFlag: GlobalVar, guardMethod: Function, guardClassCtor: Function): Unit {
-        if (hotfixDebug()) {
+        debug { =>
             println("Gen package init guard check")
         }
         let bg = patchable.body.getOrThrow()
@@ -261,7 +258,7 @@ class Patcher {
         pb.createInvoke(funcType.returnType, callContext)
         pb.createExit()
 
-        if (hotfixDebug()) {
+        debug { =>
             println(patchable.toString())
         }
     }
@@ -294,7 +291,7 @@ class Patcher {
         sb.createStore(unitConst.result, setter.returnValue.getOrThrow())
         sb.createExit()
 
-        if (hotfixDebug()) {
+        debug { =>
             println("getter for package init:")
             println(getter.toString())
             println("setter for package init:")
@@ -311,7 +308,7 @@ class Patcher {
         cl.setInternal()
         // C++ marks the class COMPILER_ADD and external. Public stdx.chir does
         // not expose those setters.
-        if (hotfixDebug()) {
+        debug { =>
             println("Create guard class")
             println("Guard class:")
             println(cl.toString())
@@ -346,7 +343,7 @@ class Patcher {
      * abstract func $..Patch: ($Patch&, <orig params>) -> <ret>
      */
     func genGuardMethod(name: String, patchable: Function): Function {
-        if (hotfixDebug()) {
+        debug { =>
             println("gen guard method for patchable func:")
             println(patchable.toString())
         }
@@ -372,7 +369,7 @@ class Patcher {
         // Public stdx.chir does not expose those setters.
 
         gc.appendMethod(method)
-        if (hotfixDebug()) {
+        debug { =>
             println("guard class with new guard method:")
             println(gc.toString())
         }
@@ -382,7 +379,7 @@ class Patcher {
     /* $patchVar: Option<$Patch&>&  (initialized to None by $guardVarsInit) */
     func genGuardVar(guardClassType: ClassLikeType, forPackageInit: Bool): GlobalVar {
         let gvName = PatchableName(pkg).genGuardVarName(forPackageInit)
-        if (hotfixDebug()) {
+        debug { =>
             println("Gen guard var " + gvName + " for class " + guardClassType.toString())
         }
         let refToClass = RefType.get(guardClassType)
@@ -392,7 +389,7 @@ class Patcher {
         // linkage setters.
 
         if (!forPackageInit) {
-            if (hotfixDebug()) {
+            debug { =>
                 println("Instantiate guard var")
             }
             gv.setInitializer(guardVarsInitializer.getOrThrow())
@@ -404,12 +401,12 @@ class Patcher {
             let tuple = b.createTuple([trueExpr.result])
             tuple.result.ty = guardVarType // override inferred tuple type to the Option enum type
             b.createStore(tuple.result, gv)
-            if (hotfixDebug()) {
+            debug { =>
                 println("guard vars initializer body:")
                 println(bg.toString())
             }
         }
-        if (hotfixDebug()) {
+        debug { =>
             println(gv.toString())
         }
         return gv
@@ -417,14 +414,14 @@ class Patcher {
 
     /* @$..PatchVarFlag: Bool& = false */
     func genGuardVarFlag(name: String): GlobalVar {
-        if (hotfixDebug()) {
+        debug { =>
             println("Gen guard var flag " + name)
         }
         let gvf = pkg.addGlobalVar(RefType.get(BoolType.get()), name, name, pkg.name)
         gvf.setInitializer(BoolLiteral.get(false))
         // C++ marks guard flag vars external. Public stdx.chir does not expose
         // linkage setters.
-        if (hotfixDebug()) {
+        debug { =>
             println(gvf.toString())
         }
         return gvf
@@ -436,7 +433,7 @@ class Patcher {
      * path; the constructor path is added in the package-init/ctor phase.)
      */
     func genGuardChecks(patchable: Function, guardVarFlag: GlobalVar, guardMethod: Function): Unit {
-        if (hotfixDebug()) {
+        debug { =>
             println("Gen guard check")
         }
         let patchableBody = patchable.body.getOrThrow()
@@ -552,10 +549,11 @@ class Patcher {
         }
         pb.createExit()
 
-        if (hotfixDebug()) {
+        let modifiedPatchableBuf = modifiedPatchable
+        debug { =>
             if (isConstructorFn(patchable)) {
                 println("new ctor:")
-                println(modifiedPatchable.toString())
+                println(modifiedPatchableBuf.toString())
             }
             println("updated patchable:")
             println(patchable.toString())

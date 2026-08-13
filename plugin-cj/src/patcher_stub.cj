@@ -27,16 +27,6 @@ class PatcherStub {
     init(pkg: Package) {
         this.pkg = pkg
         this.stubsMap = readStubMaps()
-        if (hotfixDebug()) {
-            println("")
-            println("")
-            println("")
-            if (this.stubsMap.isEmpty()) {
-                println("stub map file is empty")
-            } else {
-                println("found patched stub map file")
-            }
-        }
         this.printlnStringFunc = findStubPrintlnStringFunc(pkg)
         let gcOpt = findOptionalStubClass(pkg, PatchableName(pkg).genGuardClassName(false))
         if (gcOpt.isNone()) {
@@ -52,6 +42,16 @@ class PatcherStub {
         prepareGuardVarsInitializer()
         if (pkg.name == "package_init") {
             preparePackageInitStub()
+        }
+        debug { =>
+            println("")
+            println("")
+            println("")
+            if (this.stubsMap.isEmpty()) {
+                println("stub map file is empty")
+            } else {
+                println("found patched stub map file")
+            }
         }
     }
 
@@ -77,7 +77,7 @@ class PatcherStub {
 
     private func genMappedStubCodeForPatchMethod(patchMethod: Function, patchMethodName: String): Unit {
         let stubName = stubsMap[patchMethodName]
-        if (hotfixDebug()) {
+        debug { =>
             println("search stub code for " + patchMethodName + ": " + stubName)
         }
         let stubFn = findMappedStubFunction(pkg, stubName)
@@ -93,12 +93,12 @@ class PatcherStub {
             throw Exception("mapped stub body transplant is not available through public stdx.chir API for " +
                 patchMethodName)
         }
-        if (hotfixDebug()) {
+        debug { =>
             println("found:")
             println(stubFn.toString())
         }
         stubFn.moveBodyTo(patchMethod)
-        if (hotfixDebug()) {
+        debug { =>
             println("patch after replacement:")
             println(patchMethod.toString())
         }
@@ -175,14 +175,14 @@ class PatcherStub {
         let b = CHIRBuilder(InsertPosition.Before(term))
         let trueExpr = b.createConstant(BoolLiteral.get(true))
         b.createStore(trueExpr.result, guardVarFlag)
-        if (hotfixDebug()) {
+        debug { =>
             println("guardVarsInit after update:")
             println(entry.toString())
         }
     }
 
     private func genDefaultStubCodeForPatchMethod(patchMethod: Function): Unit {
-        if (hotfixDebug()) {
+        debug { =>
             println("stub method for " + patchMethod.srcCodeName + " was not found in stub map")
         }
         if (!patchMethod.funcType.returnType.isUnitType()) {
@@ -201,7 +201,7 @@ class PatcherStub {
         let hello = b.createConstant(StringLiteral.get(stringType(), "Hello from stub"))
         b.createApply(printlnStringFunc, FuncCallContext([hello.result], Array<Type>(), None))
         b.createExit()
-        if (hotfixDebug()) {
+        debug { =>
             println("patch after replacement:")
             println(patchMethod.toString())
         }

@@ -1,3 +1,5 @@
+// TODO move to the separate module to be used both from plugin and chir-diff
+
 /*
  * Cangjie port of the name-mangling and data structures from
  * src/PluginContext.h (the `PatchableName` and `Patchable` types).
@@ -39,6 +41,18 @@ let PACKAGE_INIT_GETTER_NAME = "packageInitGetter" + GUARD_FUNC_SUFFIX
 let PACKAGE_INIT_SETTER_NAME = "packageInitSetter" + GUARD_FUNC_SUFFIX
 let PACKAGE_LITERAL_INIT_GETTER_NAME = "packageLiteralInitGetter" + GUARD_FUNC_SUFFIX
 let PACKAGE_LITERAL_INIT_SETTER_NAME = "packageLiteralInitSetter" + GUARD_FUNC_SUFFIX
+
+
+@When[debug_mode == "true"]
+func debug(action: () -> Unit): Unit {
+    action()
+}
+
+@When[debug_mode == "false"]
+func debug(action: () -> Unit): Unit {
+    // do nothing
+}
+
 
 enum GuardMethodKind {
     | Plain

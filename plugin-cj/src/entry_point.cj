@@ -30,10 +30,6 @@ func envSet(name: String): Bool {
     return false
 }
 
-func hotfixDebug(): Bool {
-    return envSet("HOTFIX_DEBUG")
-}
-
 public class EntryPoint <: CHIRPluginBase {
     public init() {
         super("EntryPoint")
@@ -44,7 +40,7 @@ public class EntryPoint <: CHIRPluginBase {
     }
 
     public override func run(pkg: Package): Bool {
-        if (hotfixDebug()) {
+        debug { =>
             println("Running Hotfix plugin for package " + pkg.name)
         }
         let pluginContext = createPluginContext(pkg)
@@ -53,7 +49,7 @@ public class EntryPoint <: CHIRPluginBase {
         let patcher = Patcher(pkg, pluginContext)
         let patchables = findPatchables(pkg, tomlFilter)
         for (patchable in patchables) {
-            if (hotfixDebug()) {
+            debug { =>
                 println("")
                 println("")
                 println("")
@@ -71,7 +67,7 @@ public class EntryPoint <: CHIRPluginBase {
             }
         }
 
-        if (hotfixDebug()) {
+        debug { =>
             dumpSerializedPackage(pkg)
             println("Finished running Hotfix plugin")
             println("")
