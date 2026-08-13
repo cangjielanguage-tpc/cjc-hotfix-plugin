@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import sys
 
-CJPM_MODULE_DIR = "hotfix.plugin"
+CJPM_MODULE_DIR = "hotfix-plugin"
 CJPM_PACKAGE_NAME = "hotfixplugin"
 
 def run_command(command: list[str], cwd=None, env=None):
@@ -79,8 +79,7 @@ def build_plugin(project_dir: Path, build_dir: Path, cangjie_stdx_path: Path, ar
     shutil.copy2(artifact, plugin)
     print(f"Built: {plugin}")
 
-def run_unit_tests(project_dir: Path, build_dir: Path, cangjie_stdx_path: Path, env, args) -> list[str]:
-    failed_tests: list[str] = []
+def run_unit_tests(project_dir: Path, build_dir: Path, cangjie_stdx_path: Path, env, args):
     module_dir = cjpm_module_dir(project_dir)
     command = ["cjpm", "test", "-j", "4", "--no-color", "--target-dir", cjpm_target_dir(build_dir)]
     if args.build_type == "debug":
@@ -91,8 +90,7 @@ def run_unit_tests(project_dir: Path, build_dir: Path, cangjie_stdx_path: Path, 
     if test_result.stderr:
         print(test_result.stderr, end="", file=sys.stderr)
     if test_result.returncode != 0:
-        failed_tests.append("cjpm test")
-    return failed_tests
+        sys.exit(test_result.returncode)
 
 def normalize_diff_text(text: str) -> list[str]:
     return [line.rstrip() for line in text.rstrip("\n").splitlines()]
@@ -202,8 +200,6 @@ def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str
         print(f"{expected_data}")
         failed_tests.append(test_file.name)
 
-    if not failed_tests:
-        print("All tests passed")
     return failed_tests
 
 def build(args, project_dir: Path, build_dir: Path):
@@ -223,7 +219,7 @@ def build(args, project_dir: Path, build_dir: Path):
     cangjie_stdx_path = Path(env["CANGJIE_STDX_PATH"]).resolve()
     env["HOTFIX_DEBUG_MODE"] = "true" if args.build_type == "debug" else "false"
     env["HOTFIX_STUB_TEST"] = "true" if args.run_tests == "stub" else "false"
-    env["HOTFIX_PATCH_ALL"] = "true" if env.get('HOTFIX_PATCH_ALL', 'true') == "true" else "false"
+    env.setdefault("HOTFIX_PATCH_ALL", "true")
 
     print(f"Project directory: {project_dir}")
     print(f"Build directory:   {build_dir}")
@@ -237,22 +233,23 @@ def build(args, project_dir: Path, build_dir: Path):
     build_plugin(project_dir, build_dir, cangjie_stdx_path, args, env)
 
     if args.run_tests:
-        failed_tests: list[str] = []
         print("------------------------------------------------")
         print("Running unit tests...")
         print("------------------------------------------------")
-        failed_tests.extend(run_unit_tests(project_dir, build_dir, cangjie_stdx_path, env, args))
+        run_unit_tests(project_dir, build_dir, cangjie_stdx_path, env, args)
 
         print("------------------------------------------------")
         print(f"Running functional tests in {args.run_tests} mode")
         print("------------------------------------------------")
-
+        failed_tests: list[str] = []
         failed_tests.extend(run_functional_tests(project_dir, build_dir, args.run_tests, parse_filter_tests(args.filter_tests), env))
         if failed_tests:
             print("Failed tests:")
             for test in failed_tests:
                 print(f"  {test}")
             sys.exit(1)
+        else:
+            print("All tests passed")
 
 def main():
     parser = argparse.ArgumentParser(description="build / clean")
