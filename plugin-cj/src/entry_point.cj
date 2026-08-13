@@ -21,14 +21,6 @@ import std.collection.*
 import std.regex.*
 import std.fs.*
 import std.io.*
-import std.env.*
-
-func envSet(name: String): Bool {
-    if (let Some(v) <- getVariable(name)) {
-        return v != "" && v != "0"
-    }
-    return false
-}
 
 @When[stub_test == "true"]
 func stub(action: () -> Unit): Unit {

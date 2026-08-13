@@ -27,14 +27,16 @@ private func isPatchableAnno(annos: Array<CustomAnnoInstance>): Bool {
     return false
 }
 
+@When[patch_all == "false"]
 private func matchesRegexpFilter(regexpFilter: ?Regex, name: String): Bool {
-    if (envSet("HOTFIX_TEST_MODE")) {
-        match (regexpFilter) {
-            case Some(r) => return r.matches(name)
-            case None => return false
-        }
+    match (regexpFilter) {
+        case Some(r) => return r.matches(name)
+        case None => return false
     }
-    // Non-TEST behaviour: matches if there is no filter, or the filter matches.
+}
+
+@When[patch_all == "true"]
+private func matchesRegexpFilter(regexpFilter: ?Regex, name: String): Bool {
     match (regexpFilter) {
         case Some(r) => return r.matches(name)
         case None => return true

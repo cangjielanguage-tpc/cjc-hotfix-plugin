@@ -69,22 +69,24 @@ def clean(build_dir: Path):
     else:
         print("Nothing to clean.")
 
-
 def build_plugin(project_dir: Path, build_dir: Path, cangjie_stdx_root: Path, args, env):
     build_dir.mkdir(parents=True, exist_ok=True)
     plugin = plugin_path(build_dir, env)
 
-    # Difference from the C++ build.py: the source plugin is a CMake target,
-    # while plugin-cj is itself Cangjie source. Build it directly with cjc here
-    # instead of delegating to another .sh file.
+    debug_mode = "true" if args.build_type == "debug" else "false"
+    stub_test = "true" if args.run_tests == "stub" else "false"
+    patch_all = "true" if env.get('PATCH_ALL', 'true') == "true" else "false"
+
     run_command([
         "cjc",
         "-O2",
         "-j", args.jobs,
         "--cfg",
-        f"debug_mode={ "true" if args.build_type == "debug" else "false" }",
+        f"debug_mode={debug_mode}",
         "--cfg",
-        f"stub_test={ "true" if args.run_tests == "stub" else "false" }",
+        f"stub_test={stub_test}",
+        "--cfg",
+        f"patch_all={patch_all}",
         "--output-type=dylib",
         "-p", project_dir / "src",
         "--import-path", cangjie_stdx_root / "stdx",
@@ -95,7 +97,6 @@ def build_plugin(project_dir: Path, build_dir: Path, cangjie_stdx_root: Path, ar
         "--dump-chir",
     ], cwd=project_dir, env=env)
     print(f"Built: {plugin}")
-
 
 def run_unit_tests(project_dir: Path, build_dir: Path, cangjie_stdx_root: Path, env) -> list[str]:
     failed_tests: list[str] = []
@@ -163,7 +164,6 @@ def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str
     failed_tests: list[str] = []
     test_data_dir = project_dir / "test" / "functional"
     test_env = env.copy()
-    test_env["HOTFIX_TEST_MODE"] = "1"
     if run_tests_mode == "stub":
         expected_ext = "expected.stub"
     else:
