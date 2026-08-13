@@ -117,7 +117,7 @@ def test_matches_filter(test_file: Path, filter_tests: set[str] | None) -> bool:
 
 def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str, filter_tests: set[str] | None, env):
     failed_tests: list[str] = []
-    test_data_dir = project_dir / "test" / "functional"
+    test_data_dir = cjpm_module_dir(project_dir) / "test" / "functional"
     test_env = env.copy()
     if run_tests_mode == "stub":
         expected_ext = "expected.stub"
@@ -162,7 +162,7 @@ def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str
             "lib/hotfix.a",
             "--import-path", "lib",
             "--plugin", plugin,
-            "--dump-chir",
+            #"--dump-chir",
         ], cwd=test_data_dir, env=test_env)
         if compile_result.stdout:
             print(compile_result.stdout, end="")
@@ -223,7 +223,7 @@ def build(args, project_dir: Path, build_dir: Path):
     cangjie_stdx_path = Path(env["CANGJIE_STDX_PATH"]).resolve()
     env["HOTFIX_DEBUG_MODE"] = "true" if args.build_type == "debug" else "false"
     env["HOTFIX_STUB_TEST"] = "true" if args.run_tests == "stub" else "false"
-    env["HOTFIX_PATCH_ALL"] = "true" if env.get('PATCH_ALL', 'true') == "true" else "false"
+    env["HOTFIX_PATCH_ALL"] = "true" if env.get('HOTFIX_PATCH_ALL', 'true') == "true" else "false"
 
     print(f"Project directory: {project_dir}")
     print(f"Build directory:   {build_dir}")
