@@ -113,7 +113,14 @@ def test_matches_filter(test_file: Path, filter_tests: set[str] | None) -> bool:
         return True
     return test_file.name in filter_tests or test_file.stem in filter_tests
 
-def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str, filter_tests: set[str] | None, env):
+def run_functional_tests_at_compile_level(
+    project_dir: Path,
+    build_dir: Path,
+    run_tests_mode: str,
+    filter_tests: set[str] | None,
+    test_compile_level: str,
+    env,
+):
     failed_tests: list[str] = []
     test_data_dir = cjpm_module_dir(project_dir) / "test" / "functional"
     test_env = env.copy()
@@ -156,6 +163,7 @@ def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str
 
         compile_result = run_command_result([
             "cjc",
+            f"-{test_compile_level}",
             test_file.name,
             "lib/hotfix.a",
             "--import-path", "lib",
@@ -202,6 +210,30 @@ def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str
 
     return failed_tests
 
+def run_functional_tests(
+    project_dir: Path,
+    build_dir: Path,
+    run_tests_mode: str,
+    filter_tests: set[str] | None,
+    test_compile_levels: list[str],
+    env,
+):
+    for test_compile_level in test_compile_levels:
+        print("------------------------------------------------")
+        print(f"Running functional tests with -{test_compile_level}")
+        print("------------------------------------------------")
+        failed_tests = run_functional_tests_at_compile_level(
+            project_dir,
+            build_dir,
+            run_tests_mode,
+            filter_tests,
+            test_compile_level,
+            env,
+        )
+        if failed_tests:
+            return [f"{test_compile_level}: {test}" for test in failed_tests]
+    return []
+
 def build(args, project_dir: Path, build_dir: Path):
     env = os.environ.copy()
 
@@ -242,7 +274,15 @@ def build(args, project_dir: Path, build_dir: Path):
         print(f"Running functional tests in {args.run_tests} mode")
         print("------------------------------------------------")
         failed_tests: list[str] = []
-        failed_tests.extend(run_functional_tests(project_dir, build_dir, args.run_tests, parse_filter_tests(args.filter_tests), env))
+        filter_tests = parse_filter_tests(args.filter_tests)
+        failed_tests.extend(run_functional_tests(
+            project_dir,
+            build_dir,
+            args.run_tests,
+            filter_tests,
+            args.test_compile_level,
+            env,
+        ))
         if failed_tests:
             print("Failed tests:")
             for test in failed_tests:
@@ -268,6 +308,13 @@ def main():
     build_parser.add_argument(
         "--filter-tests",
         help="Comma-separated functional test names to run; requires --run-tests",
+    )
+    build_parser.add_argument(
+        "--test-compile-level",
+        nargs="+",
+        choices=["O0", "O1", "O2"],
+        default=["O0"], # TODO make [O1, O2]
+        help="Compile optimization levels for functional tests (default: O0 O1 O2)",
     )
 
     subparsers.add_parser("clean", help="clean build artifacts")
