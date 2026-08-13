@@ -30,6 +30,16 @@ func envSet(name: String): Bool {
     return false
 }
 
+@When[stub_test == "true"]
+func stub(action: () -> Unit): Unit {
+    action()
+}
+
+@When[stub_test == "false"]
+func stub(action: () -> Unit): Unit {
+    // do nothing
+}
+
 public class EntryPoint <: CHIRPluginBase {
     public init() {
         super("EntryPoint")
@@ -60,7 +70,7 @@ public class EntryPoint <: CHIRPluginBase {
         }
         patcher.genPatchClass()
 
-        if (envSet("HOTFIX_STUB_TEST")) {
+        stub { =>
             let patcherStub = PatcherStub(pkg)
             for (patchable in patchables) {
                 patcherStub.patch(patchable)

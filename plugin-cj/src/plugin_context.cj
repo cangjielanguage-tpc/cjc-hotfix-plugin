@@ -53,7 +53,6 @@ func debug(action: () -> Unit): Unit {
     // do nothing
 }
 
-
 enum GuardMethodKind {
     | Plain
     | PackageInitCtor

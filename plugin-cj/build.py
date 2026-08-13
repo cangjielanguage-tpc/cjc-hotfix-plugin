@@ -82,7 +82,9 @@ def build_plugin(project_dir: Path, build_dir: Path, cangjie_stdx_root: Path, ar
         "-O2",
         "-j", args.jobs,
         "--cfg",
-        "debug_mode=true",
+        f"debug_mode={ "true" if args.build_type == "debug" else "false" }",
+        "--cfg",
+        f"stub_test={ "true" if args.run_tests == "stub" else "false" }",
         "--output-type=dylib",
         "-p", project_dir / "src",
         "--import-path", cangjie_stdx_root / "stdx",
@@ -90,7 +92,7 @@ def build_plugin(project_dir: Path, build_dir: Path, cangjie_stdx_root: Path, ar
         "-lstdx.chir",
         "-lstdx.plugin.manager",
         "--output", plugin,
-        #"--dump-chir",
+        "--dump-chir",
     ], cwd=project_dir, env=env)
     print(f"Built: {plugin}")
 
@@ -163,10 +165,8 @@ def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str
     test_env = env.copy()
     test_env["HOTFIX_TEST_MODE"] = "1"
     if run_tests_mode == "stub":
-        test_env["HOTFIX_STUB_TEST"] = "1"
         expected_ext = "expected.stub"
     else:
-        test_env.pop("HOTFIX_STUB_TEST", None)
         expected_ext = "expected"
 
     print("Building patchable hotfix lib")
@@ -229,6 +229,8 @@ def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str
             failed_tests.append(test_file.name)
             cleanup_functional_test_outputs(test_data_dir)
             continue
+
+        print("Comparing results")
         actual_data = run_result.stdout
         expected_data = expected.read_text()
         cleanup_functional_test_outputs(test_data_dir)
@@ -238,8 +240,11 @@ def run_functional_tests(project_dir: Path, build_dir: Path, run_tests_mode: str
         if actual_lines == expected_lines:
             print("Passed")
             continue
-
-        print("Failed")
+        print("Differs")
+        print("Actual")
+        print(f"{actual_data}")
+        print("Expected")
+        print(f"{expected_data}")
         failed_tests.append(test_file.name)
 
     if not failed_tests:
@@ -262,13 +267,6 @@ def build(args, project_dir: Path, build_dir: Path):
 
     env = source_envsetup(cangjie_envsetup, env)
     env["LD_LIBRARY_PATH"] = f"{build_dir}:{cangjie_stdx_root / 'stdx'}:{env.get('LD_LIBRARY_PATH', '')}"
-    if args.build_type == "debug":
-        # C++ Debug builds enable the DEBUG preprocessor path. plugin-cj uses
-        # the runtime HOTFIX_DEBUG switch for the same diagnostic behavior, so
-        # make build type control it here.
-        env["HOTFIX_DEBUG"] = "1"
-    else:
-        env.pop("HOTFIX_DEBUG", None)
 
     build_plugin(project_dir, build_dir, cangjie_stdx_root, args, env)
 
