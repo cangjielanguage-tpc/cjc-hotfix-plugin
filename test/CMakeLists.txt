@@ -23,6 +23,6 @@ add_executable(hotfix_plugin_test "${TEST_SOURCES}")
 target_link_directories(hotfix_plugin_test PRIVATE "${CANGJIE_PATH}/tools/lib")
 target_link_libraries(hotfix_plugin_test PRIVATE "cangjie-lsp")
 
-target_link_libraries(hotfix_plugin_test PRIVATE hotfix-plugin GTest::gtest_main)
+target_link_libraries(hotfix_plugin_test PRIVATE hotfix-plugin GTest::gtest_main ${CMAKE_DL_LIBS})
 
 gtest_discover_tests(hotfix_plugin_test)
