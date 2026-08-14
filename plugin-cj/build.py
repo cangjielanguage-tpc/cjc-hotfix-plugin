@@ -1,6 +1,5 @@
 from pathlib import Path
 import argparse
-import multiprocessing
 import os
 import shutil
 import subprocess
@@ -58,7 +57,7 @@ def clean(build_dir: Path):
     else:
         print("Nothing to clean.")
 
-def build_plugin(project_dir: Path, build_dir: Path, cangjie_stdx_path: Path, args, env):
+def build_plugin(project_dir: Path, build_dir: Path, args, env):
     build_dir.mkdir(parents=True, exist_ok=True)
     plugin = plugin_path(build_dir, env)
 
@@ -79,11 +78,9 @@ def build_plugin(project_dir: Path, build_dir: Path, cangjie_stdx_path: Path, ar
     shutil.copy2(artifact, plugin)
     print(f"Built: {plugin}")
 
-def run_unit_tests(project_dir: Path, build_dir: Path, cangjie_stdx_path: Path, env, args):
+def run_unit_tests(project_dir: Path, build_dir: Path, env):
     module_dir = cjpm_module_dir(project_dir)
     command = ["cjpm", "test", "-j", "4", "--no-color", "--target-dir", cjpm_target_dir(build_dir)]
-    if args.build_type == "debug":
-        command.append("-g")
     test_result = run_command_result(command, cwd=module_dir, env=env)
     if test_result.stdout:
         print(test_result.stdout, end="")
@@ -218,6 +215,7 @@ def run_functional_tests(
     test_compile_levels: list[str],
     env,
 ):
+    all_failed_tests: list[str] = []
     for test_compile_level in test_compile_levels:
         print("------------------------------------------------")
         print(f"Running functional tests with -{test_compile_level}")
@@ -231,8 +229,8 @@ def run_functional_tests(
             env,
         )
         if failed_tests:
-            return [f"{test_compile_level}: {test}" for test in failed_tests]
-    return []
+            all_failed_tests.extend(f"{test_compile_level}: {test}" for test in failed_tests)
+    return all_failed_tests
 
 def build(args, project_dir: Path, build_dir: Path):
     env = os.environ.copy()
@@ -249,7 +247,6 @@ def build(args, project_dir: Path, build_dir: Path):
     require_tool("cjpm", env)
 
     cangjie_stdx_path = Path(env["CANGJIE_STDX_PATH"]).resolve()
-    env["HOTFIX_DEBUG_MODE"] = "true" if args.build_type == "debug" else "false"
     env["HOTFIX_STUB_TEST"] = "true" if args.run_tests == "stub" else "false"
     env.setdefault("HOTFIX_PATCH_ALL", "true")
 
@@ -262,13 +259,13 @@ def build(args, project_dir: Path, build_dir: Path):
         f"{cangjie_stdx_path}:{env.get('LD_LIBRARY_PATH', '')}"
     )
 
-    build_plugin(project_dir, build_dir, cangjie_stdx_path, args, env)
+    build_plugin(project_dir, build_dir, args, env)
 
     if args.run_tests:
         print("------------------------------------------------")
         print("Running unit tests...")
         print("------------------------------------------------")
-        run_unit_tests(project_dir, build_dir, cangjie_stdx_path, env, args)
+        run_unit_tests(project_dir, build_dir, env)
 
         print("------------------------------------------------")
         print(f"Running functional tests in {args.run_tests} mode")
@@ -313,7 +310,7 @@ def main():
         "--test-compile-level",
         nargs="+",
         choices=["O0", "O1", "O2"],
-        default=["O0"], # TODO make [O1, O2]
+        default=["O0", "O1"], # TODO delete
         help="Compile optimization levels for functional tests (default: O0 O1 O2)",
     )
 

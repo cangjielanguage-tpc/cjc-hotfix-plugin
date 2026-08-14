@@ -43,12 +43,12 @@ let PACKAGE_LITERAL_INIT_GETTER_NAME = "packageLiteralInitGetter" + GUARD_FUNC_S
 let PACKAGE_LITERAL_INIT_SETTER_NAME = "packageLiteralInitSetter" + GUARD_FUNC_SUFFIX
 
 
-@When[debug_mode == "true"]
+@When[debug]
 func debug(action: () -> Unit): Unit {
     action()
 }
 
-@When[debug_mode == "false"]
+@When[!debug]
 func debug(action: () -> Unit): Unit {
     // do nothing
 }
