@@ -4,7 +4,6 @@
 #include "cangjie/CHIR/Utils/Utils.h"
 #include "cangjie/CHIR/Serializer/CHIRDeserializer.h"
 
-#include <filesystem>
 #include <fstream>
 
 using namespace Cangjie;

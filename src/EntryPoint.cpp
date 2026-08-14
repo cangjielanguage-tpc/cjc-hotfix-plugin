@@ -10,7 +10,6 @@
 #include "PluginContext.h"
 #include "TypeFilterGenerator.h"
 #include "toml.h"
-#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <regex>
@@ -117,7 +116,8 @@ private:
 
     static bool fileExists(const std::string& path)
     {
-        return std::filesystem::exists(path) && std::filesystem::is_regular_file(path);
+        std::ifstream file(path);
+        return file.good();
     }
 };
 

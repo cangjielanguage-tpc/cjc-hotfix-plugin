@@ -25,7 +25,7 @@ add_library(hotfix-plugin SHARED ${LIB_SOURCES})
 
 if (CANGJIE_PATH)
     target_link_directories(hotfix-plugin PRIVATE "${CANGJIE_PATH}/tools/lib")
-    target_link_libraries(hotfix-plugin PRIVATE "cangjie-lsp")
+    target_link_libraries(hotfix-plugin PRIVATE "cangjie-lsp" ${CMAKE_DL_LIBS} pthread)
 
     # The plugin and libcangjie-lsp.dylib are deployed next to each other in tools/lib.
     if (APPLE)
