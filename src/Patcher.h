@@ -45,7 +45,7 @@ private:
 
     void genShouldNotReachHere(Block* block) const;
 
-    Function* createEmptyFunctionWithUnitRetVal(const std::string& name, std::vector<Type*> paramTypes) const;
+    Function* createEmptyFunctionWithUnitRetVal(const std::string& name, std::vector<Type*>& paramTypes) const;
 };
 }
 #endif // PATCHER_H

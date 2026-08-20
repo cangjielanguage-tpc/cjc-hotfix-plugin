@@ -572,9 +572,15 @@ class Patcher {
         //
         // The same public stdx.chir construction compiles in plugin-cj but
         // makes `cjc --plugin ... --dump-chir` crash with SIGSEGV for every
-        // integration fixture. Until stdx.chir exposes a safe equivalent for
-        // this terminator sequence, keep the previous safe terminator and mark
-        // this as an explicit behavior gap.
+        // integration fixture. The one-argument stdx.chir RaiseException
+        // creates a Unit result LocalVar, while the compiler deserializer
+        // reconstructs RaiseException as a terminator with no result; the
+        // serialized LocalVar then crashes in
+        // CHIRDeserializer::Deserialize(LocalVar). The two-argument overload
+        // avoids that serializer crash but lowers to invalid LLVM IR unless
+        // the successor is a real EH landing pad. Until stdx.chir exposes a
+        // safe equivalent for this terminator sequence, keep the safe
+        // terminator and mark this as an explicit behavior gap.
         CHIRBuilder(InsertPosition.AtEnd(block)).createExit()
     }
 

@@ -1064,7 +1064,7 @@ void Patcher::genShouldNotReachHere(Block* block) const
     CHIR::CreateAndAppendTerminator<RaiseException>(builder, allocException->GetResult(), block);
 }
 
-Function* Patcher::createEmptyFunctionWithUnitRetVal(const std::string& name, std::vector<Type*> paramTypes) const
+Function* Patcher::createEmptyFunctionWithUnitRetVal(const std::string& name, std::vector<Type*>& paramTypes) const
 {
     const auto fType = builder.GetType<FuncType>(paramTypes, builder.GetUnitTy());
     const auto f = builder.CreateFunction(fType, name, name, name, package->GetName(), {});

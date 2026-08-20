@@ -28,7 +28,7 @@ func stub(action: () -> Unit): Unit {
 }
 
 @When[stub_test == "false"]
-func stub(action: () -> Unit): Unit {
+func stub(_: () -> Unit): Unit {
     // do nothing
 }
 
