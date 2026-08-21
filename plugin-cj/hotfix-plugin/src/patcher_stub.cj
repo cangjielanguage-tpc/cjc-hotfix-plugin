@@ -129,7 +129,7 @@ class PatcherStub {
         let b = CHIRBuilder(InsertPosition.Before(term))
 
         let patchAlloc = b.createAllocate(patchClass.getOrThrow().classType)
-        let patchAsGuard = b.createNumericCast(patchAlloc.result, RefType.get(guardClass.getOrThrow().classType), OverflowStrategy.Throwing)
+        let patchAsGuard = b.createStaticCast(patchAlloc.result, RefType.get(guardClass.getOrThrow().classType))
         let falseExpr = b.createConstant(BoolLiteral.get(false))
 
         let guardVarType = refBaseType(guardVar.ty)

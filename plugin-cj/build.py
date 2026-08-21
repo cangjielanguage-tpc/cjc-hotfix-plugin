@@ -165,7 +165,7 @@ def run_functional_tests_at_compile_level(
             "lib/hotfix.a",
             "--import-path", "lib",
             "--plugin", plugin,
-            #"--dump-chir",
+            "--dump-chir",
         ], cwd=test_data_dir, env=test_env)
         if compile_result.stdout:
             print(compile_result.stdout, end="")
@@ -174,7 +174,6 @@ def run_functional_tests_at_compile_level(
         if compile_result.returncode != 0:
             print("Failed")
             failed_tests.append(test_file.name)
-            cleanup_functional_test_outputs(test_data_dir)
             continue
 
         run_result = run_command_result([test_data_dir / "main"], cwd=test_data_dir, env=test_env)
@@ -185,7 +184,6 @@ def run_functional_tests_at_compile_level(
                 print(run_result.stdout, end="")
             print("Failed")
             failed_tests.append(test_file.name)
-            cleanup_functional_test_outputs(test_data_dir)
             continue
 
         print("Comparing results")

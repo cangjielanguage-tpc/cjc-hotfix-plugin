@@ -248,7 +248,7 @@ class Patcher {
         // C++ creates a CHIR TypeCast here. Public stdx.chir currently exposes
         // createNumericCast for plugin code, and this is the available wrapper
         // used elsewhere in this port for the same Option-enum to Tuple cast.
-        let typeCast = pb.createNumericCast(loadedGuardVar.result, optionType, OverflowStrategy.Throwing)
+        let typeCast = pb.createStaticCast(loadedGuardVar.result, optionType)
         let caller = pb.createField(typeCast.result, pathOf(1))
         let funcType = guardMethod.funcType
         let funcCallCtx = FuncCallContext(Array<Value>(), Array<Type>(), guardClassRefType)
@@ -533,7 +533,7 @@ class Patcher {
         let optionType = TupleType.get([BoolType.get(), classRefType])
 
         let pb = CHIRBuilder(InsertPosition.AtEnd(callPatchBlock))
-        let typeCast = pb.createNumericCast(modifiedGuardVarResult, optionType, OverflowStrategy.Throwing)
+        let typeCast = pb.createStaticCast(modifiedGuardVarResult, optionType)
         let caller = pb.createField(typeCast.result, pathOf(1))
         // C++ marks caller->GetResult() READONLY. The public stdx.chir API has
         // setReadOnly on GlobalValue, not on this LocalVar result.
