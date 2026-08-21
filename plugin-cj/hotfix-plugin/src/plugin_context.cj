@@ -229,60 +229,6 @@ private func matchParentClassName(fn: Function): ?String {
     return None
 }
 
-// --- func-kind inspection -------------------------------------------------
-// The public stdx.chir API does not expose the internal FuncKind enum, but
-// Function.toString() prints it in its header line. Attributes are queried
-// through their public APIs at the use sites.
-
-/** First (header) line of a function's textual representation. */
-func funcHeaderLine(fn: Function): String {
-    let s = fn.toString()
-    match (s.indexOf("\n")) {
-        case Some(i) => return s[..i]
-        case None => return s
-    }
-}
-
-/** The FuncKind name (e.g. "StructConstructor"), or "Default" if unmarked. */
-func funcKindStr(fn: Function): String {
-    let h = funcHeaderLine(fn)
-    let key = "funcKind: "
-    if (let Some(i) <- h.indexOf(key)) {
-        let rest = h[i + key.size..]
-        match (rest.indexOf(",")) {
-            case Some(j) => return rest[..j]
-            case None => return rest
-        }
-    }
-    return "Default"
-}
-
-/** True if `fn` is any kind of constructor. */
-func isConstructorFn(fn: Function): Bool {
-    if (fn.srcCodeName == "init" && fn.declaredParent.isSome()) {
-        return true
-    }
-    let k = funcKindStr(fn)
-    return k == "ClassConstructor" || k == "PrimaryClassConstructor" || k == "StructConstructor" ||
-        k == "PrimaryStructConstructor"
-}
-
-/** True if `fn` is a struct constructor (primary or not) — C++ STRUCT/PRIMAL. */
-func isStructConstructorFn(fn: Function): Bool {
-    if (fn.srcCodeName == "init") {
-        if (let Some(parent) <- fn.declaredParent) {
-            return parent.isStruct()
-        }
-    }
-    let k = funcKindStr(fn)
-    return k == "StructConstructor" || k == "PrimaryStructConstructor"
-}
-
-/** True if `fn` is an annotation-factory function (C++ ANNOFACTORY_FUNC). */
-func isAnnoFactoryFn(fn: Function): Bool {
-    return funcKindStr(fn) == "AnnoFactoryFunc"
-}
-
 /**
  * Symbol lookups needed for CHIR generation. Port of PluginContext.h
  * `PluginContext` together with EntryPoint::createPluginContext.

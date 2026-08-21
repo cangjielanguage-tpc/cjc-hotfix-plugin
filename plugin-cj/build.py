@@ -310,7 +310,7 @@ def main():
         "--test-compile-level",
         nargs="+",
         choices=["O0", "O1", "O2"],
-        default=["O0", "O1"], # TODO delete
+        default=["O0", "O1", "O2"],
         help="Compile optimization levels for functional tests (default: O0 O1 O2)",
     )
 

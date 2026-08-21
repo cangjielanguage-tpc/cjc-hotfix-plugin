@@ -16,7 +16,7 @@
  *    to the Option enum type, matching the C++ explicit-result-type Tuple.
  *  - Public attribute setters are used for OVERRIDE/FINAL/NO_INLINE and
  *    SKIP_ANALYSIS. Remaining internal metadata (COMPILER_ADD/NO_DEBUG_INFO,
- *    external linkage and FuncKind) is documented at its use sites below.
+ *    external linkage) is documented at its use sites below.
  */
 package hotfixplugin
 
@@ -160,8 +160,7 @@ class Patcher {
         let ctorName = packagePatchableName.genGuardMethodName(PackageInitCtor)
         let ctor = createEmptyFunctionWithUnitRetVal(ctorName, paramTypes)
         ctor.setPublic()
-        // C++ sets FuncKind to CLASS_CONSTRUCTOR. Public stdx.chir does not
-        // expose a func-kind setter for plugin code.
+        ctor.setClassConstructor(false)
         CHIRBuilder(InsertPosition.AtEnd(ctor.body.getOrThrow().entryBlock)).createExit()
         cl.appendMethod(ctor)
 
@@ -476,7 +475,7 @@ class Patcher {
         var modifiedPatchableBody = patchableBody
         var modifiedGuardVarResult: Value = guardVarResult
 
-        if (isConstructorFn(patchable)) {
+        if (patchable.isClassConstructor() || patchable.isStructConstructor()) {
             // C++ creates a synthetic constructor with original parameters plus
             // the loaded guard var, invokes it from the original constructor's
             // patch block, then emits the guard-method Invoke inside that
@@ -490,10 +489,19 @@ class Patcher {
             let ctorName = PatchableName(patchable).genSyntheticCtorName()
             let ctor = createEmptyFunctionWithUnitRetVal(ctorName, paramTypes.toArray())
             ctor.setPrivate()
-            ctor.setSkipAnalysis(true)
-            // C++ also sets FuncKind to the original constructor kind,
-            // COMPILER_ADD and external linkage. Those setters are not exposed
-            // through public stdx.chir.
+            if (!patchable.isStructConstructor()) {
+                // Class patch implementations initialize fields through the
+                // passed class reference, so the synthetic constructor does
+                // not contain explicit Store nodes for every instance field.
+                ctor.setSkipAnalysis(true)
+            }
+            if (patchable.isClassConstructor()) {
+                ctor.setClassConstructor(false)
+            } else {
+                ctor.setStructConstructor(false)
+            }
+            // C++ also sets COMPILER_ADD and external linkage. Those setters
+            // are not exposed through public stdx.chir.
             if (let Some(parent) <- patchable.declaredParent) {
                 parent.appendMethod(ctor)
             }
@@ -531,7 +539,7 @@ class Patcher {
         // setReadOnly on GlobalValue, not on this LocalVar result.
 
         let funcType = guardMethod.funcType
-        let args = if (isConstructorFn(patchable)) {
+        let args = if (patchable.isClassConstructor() || patchable.isStructConstructor()) {
             let params = modifiedPatchable.parameters
             Array<Value>(params.size - 1, {i => params[i]})
         } else {
@@ -552,7 +560,7 @@ class Patcher {
 
         let modifiedPatchableBuf = modifiedPatchable
         debug { =>
-            if (isConstructorFn(patchable)) {
+            if (patchable.isClassConstructor() || patchable.isStructConstructor()) {
                 println("new ctor:")
                 println(modifiedPatchableBuf.toString())
             }
@@ -565,24 +573,14 @@ class Patcher {
      * Block: raise Exception("should not reach here").
      */
     func genShouldNotReachHere(block: Block): Unit {
-        // C++ emits:
-        //   Constant("should not reach here")
-        //   Allocate(Exception)
-        //   Apply(Exception.<init>(String))
-        //   RaiseException(exception)
-        //
-        // The same public stdx.chir construction compiles in plugin-cj but
-        // makes `cjc --plugin ... --dump-chir` crash with SIGSEGV for every
-        // integration fixture. The one-argument stdx.chir RaiseException
-        // creates a Unit result LocalVar, while the compiler deserializer
-        // reconstructs RaiseException as a terminator with no result; the
-        // serialized LocalVar then crashes in
-        // CHIRDeserializer::Deserialize(LocalVar). The two-argument overload
-        // avoids that serializer crash but lowers to invalid LLVM IR unless
-        // the successor is a real EH landing pad. Until stdx.chir exposes a
-        // safe equivalent for this terminator sequence, keep the safe
-        // terminator and mark this as an explicit behavior gap.
-        CHIRBuilder(InsertPosition.AtEnd(block)).createExit()
+        let b = CHIRBuilder(InsertPosition.AtEnd(block))
+        let errMsg = b.createConstant(StringLiteral.get(pluginCtx.stringType, "should not reach here"))
+        let exceptionType = pluginCtx.exceptionDef.ty
+        let exceptionRefType = RefType.get(exceptionType)
+        let exception = b.createAllocate(exceptionType)
+        b.createApply(pluginCtx.exceptionInitDef, FuncCallContext(
+            [exception.result, errMsg.result], Array<Type>(), Some(exceptionRefType)))
+        b.createRaiseException(exception.result)
     }
 
     func createEmptyFunctionWithUnitRetVal(name: String, paramTypes: Array<Type>): Function {
