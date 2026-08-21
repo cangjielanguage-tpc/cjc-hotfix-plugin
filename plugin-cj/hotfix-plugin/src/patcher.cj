@@ -14,10 +14,9 @@
  *    the old terminator, then appending the new control flow.
  *  - Enum (Option) values are created as tuples whose result type is overridden
  *    to the Option enum type, matching the C++ explicit-result-type Tuple.
- *  - Compiler-internal attributes/function metadata with no public setter
- *    (OVERRIDE/FINAL/COMPILER_ADD/NO_INLINE/NO_DEBUG_INFO/SKIP_ANALYSIS,
- *    external linkage, FuncKind) are still documented at the use sites below.
- *    Public equivalents (internal/protected/open/abstract/readOnly) are set.
+ *  - Public attribute setters are used for OVERRIDE/FINAL/NO_INLINE and
+ *    SKIP_ANALYSIS. Remaining internal metadata (COMPILER_ADD/NO_DEBUG_INFO,
+ *    external linkage and FuncKind) is documented at its use sites below.
  */
 package hotfixplugin
 
@@ -101,8 +100,9 @@ class Patcher {
             let baseName = baseMethod.srcCodeName
             let patchMethod = pkg.addFunction(patchMethodType, baseName, baseName, pkg.name)
             patchMethod.setProtected()
-            // C++ also marks this method OVERRIDE, FINAL and external. Public
-            // stdx.chir does not expose those setters.
+            patchMethod.setOverride(true)
+            patchMethod.setFinal(true)
+            // C++ also marks this method external; linkage is not public.
 
             patchMethod.initBody()
             let body = patchMethod.body.getOrThrow().entryBlock
@@ -144,7 +144,7 @@ class Patcher {
             let m = createEmptyFunctionWithUnitRetVal(name, paramTypes)
             m.setOpen(true)
             m.setProtected()
-            // C++ also sets NO_INLINE.
+            m.setNoInline(true)
             let block = m.body.getOrThrow().entryBlock
             genShouldNotReachHere(block)
             cl.appendMethod(m)
@@ -323,13 +323,17 @@ class Patcher {
         let entry = gvi.body.getOrThrow().entryBlock
         CHIRBuilder(InsertPosition.AtEnd(entry)).createExit()
 
-        // Call the initializer from the package init function. The C++ inserts
-        // the Apply into the block carrying the INITIALIZER attribute; that
-        // attribute is not exposed, so we insert before the terminator of the
-        // package-init entry block.
+        // Call the initializer from the package-init block carrying the
+        // INITIALIZER attribute, matching the C++ implementation.
         if (let Some(pkgInit) <- pkg.packageInitFunc) {
             if (let Some(bg) <- pkgInit.body) {
-                let block = bg.entryBlock
+                var block = bg.entryBlock
+                for (candidate in bg.blocks) {
+                    if (candidate.isInitializer()) {
+                        block = candidate
+                        break
+                    }
+                }
                 let term = lastExpr(block)
                 let b = CHIRBuilder(InsertPosition.Before(term))
                 b.createApply(gvi, FuncCallContext(Array<Value>(), Array<Type>(), None))
@@ -486,11 +490,10 @@ class Patcher {
             let ctorName = PatchableName(patchable).genSyntheticCtorName()
             let ctor = createEmptyFunctionWithUnitRetVal(ctorName, paramTypes.toArray())
             ctor.setPrivate()
-            // C++ sets FuncKind to the original constructor kind, COMPILER_ADD,
-            // external linkage, and for class constructors SKIP_ANALYSIS. Those
-            // setters are not exposed through public stdx.chir. This is the
-            // remaining known reason class-constructor tests may fail although
-            // the generated control-flow shape follows the C++ implementation.
+            ctor.setSkipAnalysis(true)
+            // C++ also sets FuncKind to the original constructor kind,
+            // COMPILER_ADD and external linkage. Those setters are not exposed
+            // through public stdx.chir.
             if (let Some(parent) <- patchable.declaredParent) {
                 parent.appendMethod(ctor)
             }

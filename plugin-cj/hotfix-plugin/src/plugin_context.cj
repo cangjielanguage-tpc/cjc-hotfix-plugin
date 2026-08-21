@@ -229,11 +229,10 @@ private func matchParentClassName(fn: Function): ?String {
     return None
 }
 
-// --- func-kind / attribute inspection ------------------------------------
-// The public stdx.chir API does not expose the internal FuncKind enum or the
-// Attribute test API, but Function.toString() prints both in its header line
-// (e.g. "funcKind: StructConstructor" and "[initializer][mut]"). We parse the
-// header to faithfully reproduce the C++ `GetFuncKind()` / `TestAttr()` checks.
+// --- func-kind inspection -------------------------------------------------
+// The public stdx.chir API does not expose the internal FuncKind enum, but
+// Function.toString() prints it in its header line. Attributes are queried
+// through their public APIs at the use sites.
 
 /** First (header) line of a function's textual representation. */
 func funcHeaderLine(fn: Function): String {
@@ -256,11 +255,6 @@ func funcKindStr(fn: Function): String {
         }
     }
     return "Default"
-}
-
-/** True if the function header carries the given attribute token, e.g. "mut". */
-func hasAttrToken(fn: Function, token: String): Bool {
-    return funcHeaderLine(fn).contains("[" + token + "]")
 }
 
 /** True if `fn` is any kind of constructor. */
@@ -287,16 +281,6 @@ func isStructConstructorFn(fn: Function): Bool {
 /** True if `fn` is an annotation-factory function (C++ ANNOFACTORY_FUNC). */
 func isAnnoFactoryFn(fn: Function): Bool {
     return funcKindStr(fn) == "AnnoFactoryFunc"
-}
-
-/** True if `fn` carries the INITIALIZER attribute. */
-func hasInitializerAttr(fn: Function): Bool {
-    return hasAttrToken(fn, "initializer")
-}
-
-/** True if `fn` carries the MUT attribute. */
-func hasMutAttr(fn: Function): Bool {
-    return hasAttrToken(fn, "mut")
 }
 
 /**

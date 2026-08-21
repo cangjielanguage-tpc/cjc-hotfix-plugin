@@ -77,7 +77,7 @@ func findPatchables(pkg: Package, regexpFilter: ?Regex): ArrayList<Patchable> {
         // methods are skipped. Class constructors are intentionally not skipped
         // here; Patcher.genGuardChecks tries the same synthetic-ctor structure
         // as C++ and documents the remaining stdx.chir API gaps there.
-        if (hasInitializerAttr(fn) || isAnnoFactoryFn(fn) || isStructConstructorFn(fn) || hasMutAttr(fn)) {
+        if (fn.isInitializer() || isAnnoFactoryFn(fn) || isStructConstructorFn(fn) || fn.isMut()) {
             continue
         }
 
