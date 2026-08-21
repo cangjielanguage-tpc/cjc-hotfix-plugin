@@ -96,7 +96,7 @@ def cleanup_functional_test_outputs(test_data_dir: Path):
     for path in test_data_dir.glob("*_CHIR"):
         if path.is_dir():
             shutil.rmtree(path)
-    for pattern in ("*.cjo", "*.cjo.flag"):
+    for pattern in ("*.cjo", "*.cjo.flag", "*.chir", "main"):
         for path in test_data_dir.glob(pattern):
             path.unlink()
 
@@ -110,7 +110,7 @@ def read_excluded_tests(test_data_dir: Path, run_tests_mode: str) -> set[str]:
     exclude_file = test_data_dir / exclude_file_name
     return {
         test.strip()
-        for test in exclude_file.read_text().split(",")
+        for test in exclude_file.read_text().splitlines()
         if test.strip()
     }
 

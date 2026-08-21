@@ -242,7 +242,7 @@ private func findMappedStubFunction(pkg: Package, name: String): Function {
 private func findStubPrintlnStringFunc(pkg: Package): Function {
     let stringTy = stubStringType(pkg)
     for (f in pkg.functions) {
-        if (f.body.isNone() && f.srcCodeName == "println" && f.funcType.paramTypes.size == 1 &&
+        if (f.srcCodeName == "println" && f.funcType.paramTypes.size == 1 &&
             f.funcType.paramTypes[0] == stringTy) {
             return f
         }
