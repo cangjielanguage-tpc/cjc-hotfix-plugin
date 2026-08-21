@@ -105,10 +105,22 @@ def parse_filter_tests(filter_tests: str | None) -> set[str] | None:
         return None
     return {test.strip() for test in filter_tests.split(",") if test.strip()}
 
+def read_excluded_tests(test_data_dir: Path, run_tests_mode: str) -> set[str]:
+    exclude_file_name = "exlude_list.stub" if run_tests_mode == "stub" else "exclude_list"
+    exclude_file = test_data_dir / exclude_file_name
+    return {
+        test.strip()
+        for test in exclude_file.read_text().split(",")
+        if test.strip()
+    }
+
 def test_matches_filter(test_file: Path, filter_tests: set[str] | None) -> bool:
     if filter_tests is None:
         return True
     return test_file.name in filter_tests or test_file.stem in filter_tests
+
+def test_is_excluded(test_file: Path, excluded_tests: set[str]) -> bool:
+    return test_file.name in excluded_tests or test_file.stem in excluded_tests
 
 def run_functional_tests_at_compile_level(
     project_dir: Path,
@@ -133,6 +145,7 @@ def run_functional_tests_at_compile_level(
 
     plugin = plugin_path(build_dir, test_env)
     all_test_files = sorted(test_data_dir.glob("*.cj"))
+    excluded_tests = read_excluded_tests(test_data_dir, run_tests_mode)
     if filter_tests:
         available_tests = {test_file.name for test_file in all_test_files} | {test_file.stem for test_file in all_test_files}
         missing_tests = filter_tests - available_tests
@@ -140,7 +153,11 @@ def run_functional_tests_at_compile_level(
             print(f"Fail. Unknown tests in --filter-tests: {','.join(sorted(missing_tests))}")
             return sorted(missing_tests)
 
-    test_files = [test_file for test_file in all_test_files if test_matches_filter(test_file, filter_tests)]
+    test_files = [
+        test_file
+        for test_file in all_test_files
+        if test_matches_filter(test_file, filter_tests) and not test_is_excluded(test_file, excluded_tests)
+    ]
 
     for test_file in test_files:
         print(f"Test file: {test_file.name}")
