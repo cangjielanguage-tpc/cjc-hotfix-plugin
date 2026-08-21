@@ -253,8 +253,7 @@ class Patcher {
         let caller = pb.createField(typeCast.result, pathOf(1))
         let funcType = guardMethod.funcType
         let funcCallCtx = FuncCallContext(Array<Value>(), Array<Type>(), guardClassRefType)
-        let virMethodCtx = FuncSigInfo(guardMethod.srcCodeName, funcType, guardMethod.genericTypeParams)
-        let callContext = InvokeCallContext(caller.result, virMethodCtx, funcCallCtx)
+        let callContext = InvokeCallContext(caller.result, funcCallCtx, guardMethod)
         pb.createInvoke(funcType.returnType, callContext)
         pb.createExit()
 
@@ -536,8 +535,7 @@ class Patcher {
             toValues(patchable.parameters)
         }
         let funcCallCtx = FuncCallContext(args, Array<Type>(), classRefType)
-        let virMethodCtx = FuncSigInfo(guardMethod.srcCodeName, funcType, guardMethod.genericTypeParams)
-        let callContext = InvokeCallContext(caller.result, virMethodCtx, funcCallCtx)
+        let callContext = InvokeCallContext(caller.result, funcCallCtx, guardMethod)
         let callMethod = pb.createInvoke(funcType.returnType, callContext)
 
         let resultType = callMethod.result.ty

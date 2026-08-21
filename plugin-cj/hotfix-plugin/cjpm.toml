@@ -6,7 +6,7 @@
   output-type = "dynamic"
   src-dir = "src"
   target-dir = "target"
-  compile-option = "--cfg stub_test=${HOTFIX_STUB_TEST} --cfg patch_all=${HOTFIX_PATCH_ALL} --dump-chir"
+  compile-option = "--cfg stub_test=${HOTFIX_STUB_TEST} --cfg patch_all=${HOTFIX_PATCH_ALL}"
   link-option = "-L ${CANGJIE_STDX_PATH}"
 
 [dependencies]
