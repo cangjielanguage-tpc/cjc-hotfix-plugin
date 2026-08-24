@@ -98,7 +98,7 @@ def parse_filter_tests(filter_tests: str | None) -> set[str] | None:
     return {test.strip() for test in filter_tests.split(",") if test.strip()}
 
 def read_excluded_tests(test_data_dir: Path, run_tests_mode: str) -> set[str]:
-    exclude_file_name = "exlude_list.stub" if run_tests_mode == "stub" else "exclude_list"
+    exclude_file_name = "exclude_list.stub" if run_tests_mode == "stub" else "exclude_list"
     exclude_file = test_data_dir / exclude_file_name
     return {
         test.strip()

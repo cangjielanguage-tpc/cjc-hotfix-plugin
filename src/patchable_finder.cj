@@ -16,8 +16,6 @@ import stdx.chir.*
 import std.collection.*
 import std.regex.*
 
-const MAIN_INVOKE = "$mainInvoke"
-
 private func isPatchableAnno(annos: Array<CustomAnnoInstance>): Bool {
     for (a in annos) {
         if (a.classSrcCodeName == "patchable") {
@@ -83,7 +81,7 @@ func findPatchables(pkg: Package, regexpFilter: ?Regex): ArrayList<Patchable> {
 
         // No need to generate guards for plugin-generated methods.
         let funcIdentifier = fn.srcCodeName
-        if (funcIdentifier == MAIN_INVOKE || funcIdentifier == guardVarInitializerName ||
+        if (funcIdentifier == "$mainInvoke" || funcIdentifier == guardVarInitializerName ||
             funcIdentifier == packageInitFlagGetter || funcIdentifier == packageInitFlagSetter ||
             funcIdentifier == packageLiteralInitFlagGetter || funcIdentifier == packageLiteralInitFlagSetter) {
             continue
@@ -117,20 +115,5 @@ func findPatchables(pkg: Package, regexpFilter: ?Regex): ArrayList<Patchable> {
         }
     }
 
-    return sortPatchables(collected)
-}
-
-/** Insertion sort using the C++ operator< total order (small lists). */
-private func sortPatchables(items: ArrayList<Patchable>): ArrayList<Patchable> {
-    let arr = items
-    for (i in 1..arr.size) {
-        let cur = arr[i]
-        var j = i - 1
-        while (j >= 0 && cur.lessThan(arr[j])) {
-            arr[j + 1] = arr[j]
-            j -= 1
-        }
-        arr[j + 1] = cur
-    }
-    return arr
+    return collected
 }
