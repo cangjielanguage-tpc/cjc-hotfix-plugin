@@ -1,9 +1,7 @@
 .idea
 output/
-compile_commands.json
 *.chir
 *.chirtxt
 *.a
 *.cjo
 *_CHIR
-
