@@ -179,7 +179,7 @@ public:
         const auto alloc = CHIR::CreateAndAppendExpression<Allocate>(builder, builder.GetType<RefType>(patchClassType),
             patchClassType, newBlock);
 
-        const auto typeCast = CHIR::CreateAndAppendExpression<TypeCast>(builder,
+        const auto typeCast = CHIR::CreateAndAppendExpression<ClassStaticCast>(builder,
             builder.GetType<RefType>(guardClass->GetType()), alloc->GetResult(), newBlock);
 
         const auto falseExpr = builder.CreateConstantExpression<BoolLiteral>(builder.GetBoolTy(), newBlock, false);

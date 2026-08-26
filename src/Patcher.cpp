@@ -303,7 +303,7 @@ ClassDef* Patcher::genPackageInitGuardClass() const
   }
  */
 void Patcher::genPackageInitGuardChecks(const Function* patchable, Type* guardClassType, GlobalVar* guardVar,
-    GlobalVar* guardVarFlag, const Function* guardMethod, Function* guardClassCtor) const
+    GlobalVar* guardVarFlag, Function* guardMethod, Function* guardClassCtor) const
 {
 #ifdef DEBUG
     std::cout << "Gen guard check" << std::endl;
@@ -325,7 +325,7 @@ void Patcher::genPackageInitGuardChecks(const Function* patchable, Type* guardCl
 
     const auto loadGuardVarFlag = builder.CreateExpression<Load>(builder.GetBoolTy(), guardVarFlag, entryBlock);
     loadGuardVarFlag->MoveBefore(entryBlockTerminator);
-    const auto guardVarFlagCond = builder.CreateExpression<UnaryExpression>(builder.GetBoolTy(), CHIR::ExprKind::NOT,
+    const auto guardVarFlagCond = builder.CreateExpression<UnaryExpression>(builder.GetBoolTy(), UnaryExprKind::NOT,
         loadGuardVarFlag->GetResult(), OverflowStrategy::THROWING, entryBlock);
     guardVarFlagCond->MoveAfter(loadGuardVarFlag);
 
@@ -356,7 +356,7 @@ void Patcher::genPackageInitGuardChecks(const Function* patchable, Type* guardCl
     guardVarCheckBlock->AppendExpression(falseConst);
 
     const auto guardVarCheckCond = CHIR::CreateAndAppendExpression<BinaryExpression>(builder, builder.GetBoolTy(),
-        CHIR::ExprKind::EQUAL, field->GetResult(), falseConst->GetResult(), guardVarCheckBlock);
+        BinaryExprKind::EQUAL, field->GetResult(), falseConst->GetResult(), guardVarCheckBlock);
 
     const auto guardVarInitializedBlock = builder.CreateBlock(entryBlock->GetParentBlockGroup());
     const auto guardVarNotInitializedBlock = builder.CreateBlock(entryBlock->GetParentBlockGroup());
@@ -398,7 +398,7 @@ void Patcher::genPackageInitGuardChecks(const Function* patchable, Type* guardCl
         callPatchBlock);
 
     const auto tupleType = builder.GetType<TupleType>(std::vector<Type*>{builder.GetBoolTy(), guardClassRefType});
-    const auto typeCast = CHIR::CreateAndAppendExpression<TypeCast>(builder, tupleType, loadGuardVar->GetResult(),
+    const auto typeCast = CHIR::CreateAndAppendExpression<ClassStaticCast>(builder, tupleType, loadGuardVar->GetResult(),
         callPatchBlock);
 
     field = CHIR::CreateAndAppendExpression<Field>(builder, guardClassRefType, typeCast->GetResult(),
@@ -408,17 +408,13 @@ void Patcher::genPackageInitGuardChecks(const Function* patchable, Type* guardCl
     const auto funcParameters = GetFuncParams(*bg);
     const auto callContext =
         InvokeCallContext{
+            .method = guardMethod,
             .caller = field->GetResult(),
             .funcCallCtx = FuncCallContext{
                 .args = {},
                 .instTypeArgs = {}, // TODO support generics
                 .thisType = guardClassRefType,
             },
-            .virMethodCtx = FuncSigInfo{
-                .funcName = guardMethod->GetSrcCodeIdentifier(),
-                .funcType = guardMethod->GetFuncType(),
-                .genericTypeParams = guardMethod->GetGenericTypeParams(),
-            }
         };
     CHIR::CreateAndAppendExpression<Invoke>(builder, guardMethod->GetReturnType(), callContext, callPatchBlock);
 
@@ -864,7 +860,7 @@ GlobalVar* Patcher::genGuardVarFlag(const std::string& name) const
       RaiseException(%16)
   }
  */
-void Patcher::genGuardChecks(const Function* const patchable, GlobalVar* guardVarFlag, const Function* guardMethod)
+void Patcher::genGuardChecks(const Function* const patchable, GlobalVar* guardVarFlag, Function* guardMethod)
 {
 #ifdef DEBUG
     std::cout << "Gen guard check" << std::endl;
@@ -877,7 +873,7 @@ void Patcher::genGuardChecks(const Function* const patchable, GlobalVar* guardVa
 
     const auto loadGuardVarFlag = builder.CreateExpression<Load>(builder.GetBoolTy(), guardVarFlag, entryBlock);
     loadGuardVarFlag->MoveBefore(entryBlockTerminator);
-    const auto guardVarFlagCond = builder.CreateExpression<UnaryExpression>(builder.GetBoolTy(), CHIR::ExprKind::NOT,
+    const auto guardVarFlagCond = builder.CreateExpression<UnaryExpression>(builder.GetBoolTy(), UnaryExprKind::NOT,
         loadGuardVarFlag->GetResult(), OverflowStrategy::THROWING, entryBlock);
     guardVarFlagCond->MoveAfter(loadGuardVarFlag);
 
@@ -902,7 +898,7 @@ void Patcher::genGuardChecks(const Function* const patchable, GlobalVar* guardVa
     guardVarCheckBlock->AppendExpression(falseConst);
 
     const auto guardVarCheckCond = CHIR::CreateAndAppendExpression<BinaryExpression>(builder, builder.GetBoolTy(),
-        CHIR::ExprKind::EQUAL, field->GetResult(), falseConst->GetResult(), guardVarCheckBlock);
+        BinaryExprKind::EQUAL, field->GetResult(), falseConst->GetResult(), guardVarCheckBlock);
 
     auto callPatchBlock = builder.CreateBlock(entryBlock->GetParentBlockGroup());
 
@@ -970,7 +966,7 @@ void Patcher::genGuardChecks(const Function* const patchable, GlobalVar* guardVa
 
     const std::vector<Type*> optionTypeArgs{builder.GetBoolTy(), guardVarBaseType->GetTypeArgs().front()};
     const auto optionType = builder.GetType<TupleType>(optionTypeArgs);
-    const auto typeCast = CHIR::CreateAndAppendExpression<TypeCast>(builder, optionType, guardVarResult,
+    const auto typeCast = CHIR::CreateAndAppendExpression<ClassStaticCast>(builder, optionType, guardVarResult,
         callPatchBlock);
 
     const auto caller = CHIR::CreateAndAppendExpression<Field>(builder, guardVarBaseType->GetTypeArgs().front(),
@@ -990,17 +986,13 @@ void Patcher::genGuardChecks(const Function* const patchable, GlobalVar* guardVa
 
     const auto callContext =
         InvokeCallContext{
+            .method = guardMethod,
             .caller = caller->GetResult(),
             .funcCallCtx = FuncCallContext{
                 .args = std::vector<Value*>(funcParameters.begin(), funcParameters.end()),
                 .instTypeArgs = {}, // TODO support generics
                 .thisType = guardVarBaseType->GetTypeArgs().front(),
             },
-            .virMethodCtx = FuncSigInfo{
-                .funcName = guardMethod->GetSrcCodeIdentifier(),
-                .funcType = funcType,
-                .genericTypeParams = guardMethod->GetGenericTypeParams(),
-            }
         };
     const auto callMethod = CHIR::CreateAndAppendExpression<Invoke>(builder, funcType->GetReturnType(), callContext,
         callPatchBlock);
