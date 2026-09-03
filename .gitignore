@@ -1,7 +1,11 @@
-.idea
+.idea/
+__pycache__/
 output/
+compile_commands.json
+*.a
+*.actual
 *.chir
 *.chirtxt
-*.a
 *.cjo
-*_CHIR
+*.cjo.flag
+*_CHIR/
