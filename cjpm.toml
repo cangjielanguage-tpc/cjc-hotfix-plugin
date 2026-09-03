@@ -1,0 +1,28 @@
+[package]
+  cjc-version = "0.0.1"
+  name = "hotfixplugin"
+  description = "Cangjie CHIR hotfix plugin"
+  version = "1.0.0"
+  output-type = "dynamic"
+  src-dir = "src"
+  target-dir = "target"
+  compile-option = "--cfg stub_test=${HOTFIX_STUB_TEST} --cfg patch_all=${HOTFIX_PATCH_ALL}"
+  link-option = "-L ${CANGJIE_STDX_PATH}"
+
+[dependencies]
+
+[target.x86_64-unknown-linux-gnu.bin-dependencies.package-option]
+  "stdx.chir" = "${CANGJIE_STDX_PATH}/stdx.chir.cjo"
+  "stdx.plugin.manager" = "${CANGJIE_STDX_PATH}/stdx.plugin.manager.cjo"
+
+[target.aarch64-unknown-linux-gnu.bin-dependencies.package-option]
+  "stdx.chir" = "${CANGJIE_STDX_PATH}/stdx.chir.cjo"
+  "stdx.plugin.manager" = "${CANGJIE_STDX_PATH}/stdx.plugin.manager.cjo"
+
+[target.x86_64-apple-darwin.bin-dependencies.package-option]
+  "stdx.chir" = "${CANGJIE_STDX_PATH}/stdx.chir.cjo"
+  "stdx.plugin.manager" = "${CANGJIE_STDX_PATH}/stdx.plugin.manager.cjo"
+
+[target.aarch64-apple-darwin.bin-dependencies.package-option]
+  "stdx.chir" = "${CANGJIE_STDX_PATH}/stdx.chir.cjo"
+  "stdx.plugin.manager" = "${CANGJIE_STDX_PATH}/stdx.plugin.manager.cjo"
