@@ -1,0 +1,8 @@
+.idea
+cjpm.lock
+output/
+*.chir
+*.chirtxt
+*.a
+*.cjo
+*_CHIR

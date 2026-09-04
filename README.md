@@ -1,34 +1,37 @@
-# Hotfix plugin for Cangjie compiler
+# Cangjie hotfix tools
 
-Plugin for Cangjie compiler (`cjc`) that makes certain transformations during CHIR generation phase 
-to prepare the source code for possible hot fixes in the future.  
+This repository contains two related tools:
 
-## Build
+- `cjc-plugin` — a Cangjie compiler plugin that prepares CHIR for hot fixes.
+- `patch-gen` — a utility that generates a hotfix patch.
 
-Clean directory with artifacts (`output`) if it exists:
+## Environment
+
+Set the toolchain and `stdx` paths before building.
+
+## Build and test
+
+Build the compiler plugin and optionally run its normal or stub tests:
+
+```bash
+python3 build.py build-plugin --run-tests normal
+python3 build.py build-plugin --run-tests stub
+```
+
+Build the patch generator and run its tests (the plugin must be built first):
+
+```bash
+python3 build.py build-patch-gen --plugin <plugin_path> --build-type release --run-tests
+```
+
+Useful shared options are `--build-type`, `--filter-tests`, and
+`--test-compile-level`. Run `python3 build.py COMMAND --help` for details.
+
+Build artifacts are written to `output/cjc-plugin` and `output/patch-gen`.
+Remove all artifacts with:
 
 ```bash
 python3 build.py clean
 ```
 
-Build `output/libhotfix-plugin.so` in corresponding build mode:
-
-```bash
-python3 build.py build --build_type <debug or release> <cangjie_toolchain_path>
-```
-
-## Test
-
-Run tests in corresponding test mode:
-
-```bash
-python3 build.py build --run-tests <normal or stub> <cangjie_toolchain_path>
-```
-
-## Structure description
-
-- `src` - plugin source code
-- `test` - plugin unit tests and integration tests
-- `libs` - external libraries
-  - Now only `toml++.h` locates there as one-header file library.
-    Probably should be removed if `cjc` provides proper implementation (TODO).
+The resulting binaries are `output/cjc-plugin/libhotfix-plugin.so` and `output/patch-gen/patch-gen` on Linux (`libhotfix-plugin.dylib` on macOS).
