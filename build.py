@@ -32,15 +32,16 @@ def run_command_result(
     env=None,
     *,
     combine_output: bool = False,
+    stream_output: bool = False,
 ) -> subprocess.CompletedProcess:
     command = [str(part) for part in command]
-    print(command)
-    stderr = subprocess.STDOUT if combine_output else subprocess.PIPE
+    print(command, flush=True)
+    stderr = subprocess.STDOUT if combine_output else (None if stream_output else subprocess.PIPE)
     return subprocess.run(
         command,
         cwd=cwd,
         env=env,
-        stdout=subprocess.PIPE,
+        stdout=None if stream_output else subprocess.PIPE,
         stderr=stderr,
         text=True,
     )
@@ -218,6 +219,7 @@ def run_plugin_functional_tests_at_level(args, compile_level: str, env) -> list[
             ],
             cwd=test_data_dir,
             env=test_env,
+            stream_output=True,
         )
         if compile_result.returncode != 0:
             if compile_result.stdout:
@@ -363,7 +365,9 @@ def run_patch_gen_tests_at_level(
             base_chir,
             "--emit-chir",
         ]
-        base_result = run_command_result(compile_base, cwd=test_data_dir, env=env)
+        base_result = run_command_result(
+            compile_base, cwd=test_data_dir, env=env, stream_output=True
+        )
         if base_result.returncode != 0:
             if base_result.stdout:
                 print(base_result.stdout, end="")
@@ -380,7 +384,9 @@ def run_patch_gen_tests_at_level(
             compile_patched = compile_base.copy()
             compile_patched[3] = patched_file.name
             compile_patched[-2] = patched_chir
-            patched_result = run_command_result(compile_patched, cwd=test_data_dir, env=env)
+            patched_result = run_command_result(
+                compile_patched, cwd=test_data_dir, env=env, stream_output=True
+            )
             if patched_result.returncode != 0:
                 if patched_result.stdout:
                     print(patched_result.stdout, end="")
