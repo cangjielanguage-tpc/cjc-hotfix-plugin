@@ -160,7 +160,7 @@ class Patcher {
         let ctorName = packagePatchableName.genGuardMethodName(PackageInitCtor)
         let ctor = createEmptyFunctionWithUnitRetVal(ctorName, paramTypes)
         ctor.setPublic()
-        ctor.setClassConstructor(false)
+        ctor.setClassConstructor()
         CHIRBuilder(InsertPosition.AtEnd(ctor.body.getOrThrow().entryBlock)).createExit()
         cl.appendMethod(ctor)
 
@@ -496,9 +496,9 @@ class Patcher {
                 ctor.setSkipAnalysis(true)
             }
             if (patchable.isClassConstructor()) {
-                ctor.setClassConstructor(false)
+                ctor.setClassConstructor()
             } else {
-                ctor.setStructConstructor(false)
+                ctor.setStructConstructor()
             }
             // C++ also sets COMPILER_ADD and external linkage. Those setters
             // are not exposed through public stdx.chir.
