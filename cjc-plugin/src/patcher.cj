@@ -26,6 +26,7 @@ import std.collection.*
 class Patcher {
     let pkg: Package
     let pluginCtx: PluginContext
+    let packageInitFlag: GlobalVar
 
     // Lazily initialized on the first `patch` call.
     var guardVarsInitializer: ?Function = None
@@ -35,6 +36,7 @@ class Patcher {
     init(pkg: Package, pluginCtx: PluginContext) {
         this.pkg = pkg
         this.pluginCtx = pluginCtx
+        this.packageInitFlag = findGlobalVar(pkg, "$has_applied_pkg_init_func")
 
         let packageInitGuardClass = genPackageInitGuardClass()
         let packageInitGuardClassType = packageInitGuardClass.classType
@@ -55,7 +57,6 @@ class Patcher {
         genPackageInitGuardChecks(findPackageLiteralInitFunc(pkg), packageInitGuardClassType,
             packageInitGuardVar, packageInitGuardVarFlag, guardClassMethods[1], guardClassCtor)
 
-        let packageInitFlag = findGlobalVar(pkg, "$has_applied_pkg_init_func")
         let packageInitLiteralFlag = findGlobalVar(pkg, "has_invoked_pkg_init_literal")
         genPackageInitAccessors(packageInitFlag, AccPackageInit)
         genPackageInitAccessors(packageInitLiteralFlag, AccPackageLiteralInit)
@@ -314,6 +315,21 @@ class Patcher {
         return cl
     }
 
+    func isInitializerBlock(b: Block): Bool {
+        let exprs = b.exprs
+        if (exprs.size < 2) {
+            return false
+        }
+        if (let Some(constant) <- (exprs[0] as Constant)) {
+            if (let Some(store) <- (exprs[1] as Store)) {
+                if (let Some(literal) <- (constant.operands[0] as BoolLiteral)) {
+                    return literal.value && store.srcValue == constant.result && store.dstAddress == packageInitFlag
+                }
+            }
+        }
+        return false
+    }
+
     /* func $guardVarsInit() : Unit { Allocate(Unit); Exit } and an Apply into package init. */
     func genGuardVarsInitializer(): Function {
         let gviName = PatchableName(pkg).genGuardVarInitializedName()
@@ -322,13 +338,11 @@ class Patcher {
         let entry = gvi.body.getOrThrow().entryBlock
         CHIRBuilder(InsertPosition.AtEnd(entry)).createExit()
 
-        // Call the initializer from the package-init block carrying the
-        // INITIALIZER attribute, matching the C++ implementation.
         if (let Some(pkgInit) <- pkg.packageInitFunc) {
             if (let Some(bg) <- pkgInit.body) {
                 var block = bg.entryBlock
                 for (candidate in bg.blocks) {
-                    if (candidate.isInitializer()) {
+                    if (isInitializerBlock(candidate)) {
                         block = candidate
                         break
                     }
