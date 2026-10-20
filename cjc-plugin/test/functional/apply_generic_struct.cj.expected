@@ -1,0 +1,8 @@
+42
+Some(43)
+44
+foo 42 Some(43) 44
+false
+true
+false
+apply_generic_struct passed

@@ -1,0 +1,3 @@
+FOO<T>::foo<S>
+FOO<T>::bar<S>
+open_generic_mut_extension passed

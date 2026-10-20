@@ -1,0 +1,40 @@
+// Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+// This source file is part of the Cangjie project, licensed under Apache-2.0
+// with Runtime Library Exception.
+//
+// See https://cangjie-lang.cn/pages/LICENSE for license information.
+
+import hotfix.patchable
+
+@patchable
+interface I {
+    func foo(): Unit
+}
+
+@patchable
+class A<T> {
+    var a = 1
+}
+
+extend<T> A<T> <: I {
+    @patchable
+    public func foo() {
+        a++
+    }
+}
+
+@patchable
+func exercise() {
+    var x = A<Int8>()
+    x.foo()
+    var y = A<Int8>()
+    y.foo()
+    return x.a - y.a
+}
+
+main(): Int64 {
+    let result = exercise()
+    if (result != 0) { return 1 }
+    println("generic_extension passed")
+    0
+}

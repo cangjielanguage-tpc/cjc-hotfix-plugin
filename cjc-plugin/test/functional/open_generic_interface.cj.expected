@@ -1,0 +1,5 @@
+A<T>::foo<S>
+A<T>::bar<S>
+SC<T>::foo<S>
+SC<T>::bar<S>
+open_generic_interface passed

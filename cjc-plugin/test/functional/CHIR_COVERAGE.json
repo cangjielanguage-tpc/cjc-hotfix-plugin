@@ -1,0 +1,588 @@
+[
+  {
+    "test": "apply_struct.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/CallExpr/apply_like_03.cj"
+    ],
+    "variants": "Apply: concrete struct constructor, static and instance receiver",
+    "adapted": false
+  },
+  {
+    "test": "apply_class.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/Class/testClass04.cj",
+      "cjc-plugin/test/functional/class.cj (folded into this case)"
+    ],
+    "variants": "Apply: concrete class instance receiver; optional/Int32 parameters and Float64 static call",
+    "adapted": true
+  },
+  {
+    "test": "apply_generic_struct.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/Struct/testStruct04.cj",
+      "cjc-plugin/test/functional/struct.cj (folded into this case)"
+    ],
+    "variants": "Apply: generic method on value receiver; mixed scalar/Option/reference fields and methods",
+    "adapted": true
+  },
+  {
+    "test": "apply_generic_class.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/Class/testClass05.cj"
+    ],
+    "variants": "Apply: generic method on reference receiver",
+    "adapted": false
+  },
+  {
+    "test": "apply_constrained.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/AST2CHIR/TranslateGenericDecl/OneGenericParam/typeT_apply.cj"
+    ],
+    "variants": "Apply: generic receiver with class bound",
+    "adapted": false
+  },
+  {
+    "test": "invoke_constrained.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/AST2CHIR/TranslateGenericDecl/OneGenericParam/typeT_invoke.cj"
+    ],
+    "variants": "Invoke: overridden method through generic class bound",
+    "adapted": false
+  },
+  {
+    "test": "invoke_static.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/InvokeStatic/abstractclass.cj"
+    ],
+    "variants": "InvokeStatic: generic static dispatch through class bound",
+    "adapted": false
+  },
+  {
+    "test": "invoke_static_instance_context.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/InvokeStatic/callstatic_ininstance.cj"
+    ],
+    "variants": "InvokeStatic: inherited static lookup from instance and static methods",
+    "adapted": false
+  },
+  {
+    "test": "invoke_static_closure.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/InvokeStatic/ongeneric.cj"
+    ],
+    "variants": "InvokeStatic in a closure capturing type arguments",
+    "adapted": false
+  },
+  {
+    "test": "generic_property.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/Generic/testGeneric09.cj"
+    ],
+    "variants": "Invoke property getters through generic interface bound and primitive extension",
+    "adapted": false
+  },
+  {
+    "test": "generic_static_function_value.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/Generic/testGeneric16.cj"
+    ],
+    "variants": "GetInstantiateValue and closure wrapper for constrained static method",
+    "adapted": true
+  },
+  {
+    "test": "generic_instance_function_value.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/Generic/testGeneric17.cj"
+    ],
+    "variants": "Bound method closure for generic interface receiver",
+    "adapted": true
+  },
+  {
+    "test": "open_generic_class.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/OpenGeneric/basic.cj"
+    ],
+    "variants": "Virtual generic methods: overridden method, abstract method, type bounds",
+    "adapted": false
+  },
+  {
+    "test": "open_generic_interface.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/OpenGeneric/inter.cj"
+    ],
+    "variants": "Virtual generic methods: class and struct implementations through interface",
+    "adapted": false
+  },
+  {
+    "test": "open_generic_extension.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/OpenGeneric/extend.cj"
+    ],
+    "variants": "Virtual generic methods supplied by class/struct extensions",
+    "adapted": false
+  },
+  {
+    "test": "open_generic_mut_extension.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/OpenGeneric/mut.cj"
+    ],
+    "variants": "Generic mut extension methods and interface receiver wrappers",
+    "adapted": false
+  },
+  {
+    "test": "generic_variant_function.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/OpenGeneric/lambda.cj"
+    ],
+    "variants": "Generic bound method with covariant return and function signature adaptation",
+    "adapted": false
+  },
+  {
+    "test": "extension_static_value.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/Extend/testExtend35.cj"
+    ],
+    "variants": "Primitive static extension method used as a function value",
+    "adapted": false
+  },
+  {
+    "test": "extension_interface.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/Extend/testExtend02.cj"
+    ],
+    "variants": "Class extension conformance, Invoke through interface argument",
+    "adapted": false
+  },
+  {
+    "test": "extension_default.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/Extend/testExtend04.cj"
+    ],
+    "variants": "Default interface method supplied through extension",
+    "adapted": false
+  },
+  {
+    "test": "extension_alias.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/Extend/testExtend03.cj"
+    ],
+    "variants": "Extension of aliased class type",
+    "adapted": false
+  },
+  {
+    "test": "generic_extension.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/AST2CHIR/TranslateGenericDecl/OneGenericParam/extend_T.cj"
+    ],
+    "variants": "Generic extension method modifies class field",
+    "adapted": false
+  },
+  {
+    "test": "box_struct_interface.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/Box/box03.cj"
+    ],
+    "variants": "Box struct as interface; InstanceOf and UnBoxToValue in type pattern",
+    "adapted": true
+  },
+  {
+    "test": "box_generic_struct.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/Box/box02.cj"
+    ],
+    "variants": "CastToGeneric and UnBoxToValue for struct generic argument",
+    "adapted": true
+  },
+  {
+    "test": "box_generic_class.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/Box/box05.cj"
+    ],
+    "variants": "CastToGeneric and reference recovery for class generic argument",
+    "adapted": true
+  },
+  {
+    "test": "box_recursive_enum.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/RecursionEnum/recursionEnum04.cj"
+    ],
+    "variants": "Recursive enum/struct payload representation, discriminant and payload extraction",
+    "adapted": false
+  },
+  {
+    "test": "generic_nested_enum.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/TypeCast/typecast07.cj"
+    ],
+    "variants": "Generic enum with nested generic class payload and multi-field alternative",
+    "adapted": true
+  },
+  {
+    "test": "generic_static_value.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/StaticVar/static_var_01.cj"
+    ],
+    "variants": "Generic static field: primitive initializer and GetInstantiateValue",
+    "adapted": false
+  },
+  {
+    "test": "generic_static_reference.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/StaticVar/static_var_02.cj"
+    ],
+    "variants": "Generic static field: reference initializer and field load",
+    "adapted": false
+  },
+  {
+    "test": "global_constant.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIROpt/Optimizations/GlobalConstVars/testGlobalConstVar01.cj"
+    ],
+    "variants": "Global let versus global var, constant propagation candidate",
+    "adapted": false
+  },
+  {
+    "test": "mutable_struct.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/MutableSemantics/testMutableRecordField.cj"
+    ],
+    "variants": "Value receiver copy and field store independence",
+    "adapted": false
+  },
+  {
+    "test": "mutable_class.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/MutableSemantics/testMutableClass.cj"
+    ],
+    "variants": "Reference assignment aliasing and mutation through argument",
+    "adapted": false
+  },
+  {
+    "test": "mutable_array.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/MutableSemantics/testMutableArray.cj"
+    ],
+    "variants": "Array representation sharing and element mutation through argument",
+    "adapted": false
+  },
+  {
+    "test": "mut_receiver.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/MutableSemantics/testMutableInMethod.cj"
+    ],
+    "variants": "Mut struct receiver and nested reference field mutation",
+    "adapted": false
+  },
+  {
+    "test": "nested_struct_store.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/Assign/nestStruct.cj"
+    ],
+    "variants": "GetElementRef and StoreElementRef through nested value aggregates",
+    "adapted": false
+  },
+  {
+    "test": "nested_class_store.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/Assign/testMemberAccessAsg02.cj"
+    ],
+    "variants": "Load class references and compound store through field chain",
+    "adapted": false
+  },
+  {
+    "test": "mut_property.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/Struct/testStruct05.cj"
+    ],
+    "variants": "Mut struct getter/setter receiver, property lowered to calls",
+    "adapted": false
+  },
+  {
+    "test": "nested_struct_increment.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/IncOrDecExpr/testIncOrDecExpr02.cj"
+    ],
+    "variants": "Nested value field increment and writeback",
+    "adapted": false
+  },
+  {
+    "test": "boxed_mutable_capture.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/BoxingLocalMutVar/mutVarCapturedByLocalFunc01.cj"
+    ],
+    "variants": "Boxed local primitive captured by recursive local function",
+    "adapted": false
+  },
+  {
+    "test": "boxed_reference_capture.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/BoxingLocalMutVar/varWithTypeClass_box.cj"
+    ],
+    "variants": "Boxed local reference rebound inside recursive closure",
+    "adapted": false
+  },
+  {
+    "test": "bound_struct_method.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/AST2CHIR/Apply/boxin_lambda.cj"
+    ],
+    "variants": "Boxed struct receiver in bound default-interface function value",
+    "adapted": false
+  },
+  {
+    "test": "lambda_nothing_wrapper.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/LambdaWrapper/lambdaWrapper02.cj"
+    ],
+    "variants": "Lambda wrapper with Nothing parameter signature conversion",
+    "adapted": false
+  },
+  {
+    "test": "higher_order_wrapper.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/LambdaWrapper/lambdaWrapper08.cj"
+    ],
+    "variants": "Function/lambda wrapper returning another function",
+    "adapted": false
+  },
+  {
+    "test": "pattern_interface_tuple.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/PatternMatch/testMatchWithBox01.cj"
+    ],
+    "variants": "Tuple Field, interface InstanceOf and Invoke under pattern guard",
+    "adapted": false
+  },
+  {
+    "test": "varray_writeback.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/VArray/varray02.cj"
+    ],
+    "variants": "VArray literal, indexed store, ordered index evaluation",
+    "adapted": false
+  },
+  {
+    "test": "varray_nested_repeat.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/VArray/varray01.cj"
+    ],
+    "variants": "Nested VArray repeat construction and element extraction",
+    "adapted": false
+  },
+  {
+    "test": "unit_any.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/AST2CHIR/Unit/anyunit_switch.cj"
+    ],
+    "variants": "Unit boxed to Any at match merge, mixed value branch",
+    "adapted": false
+  },
+  {
+    "test": "generic_aggregate_fields.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/AST2CHIR/TranslateGenericDecl/EmbeddedGenericParam/T_is_generic_struct.cj"
+    ],
+    "variants": "Generic class/struct/tuple fields: concrete value and reference type arguments",
+    "adapted": true
+  },
+  {
+    "test": "generic_mut_receiver.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/OpenGeneric/mut.cj"
+    ],
+    "variants": "UnBoxToRef and writeback for constrained mut generic value receiver",
+    "adapted": true
+  },
+  {
+    "test": "extension_constrained.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/Box/box18.cj"
+    ],
+    "variants": "Conditional generic extension conformance and interface dispatch",
+    "adapted": true
+  },
+  {
+    "test": "try_apply.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/Exception/testTryCatch01.cj"
+    ],
+    "variants": "TryApply, RaiseException, GetException, catch and finally edges",
+    "adapted": true
+  },
+  {
+    "test": "try_invoke.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/InvokeNodetest/testDevirt01.cj"
+    ],
+    "variants": "TryInvoke through interface, normal and exceptional successors",
+    "adapted": true
+  },
+  {
+    "test": "try_invoke_static.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/InvokeStatic/ongeneric.cj"
+    ],
+    "variants": "TryInvokeStatic with generic static interface constraint",
+    "adapted": true
+  },
+  {
+    "test": "try_numeric_cast.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/AST2CHIR/Typecast/exception.cj"
+    ],
+    "variants": "NumericCast and TryNumericCast with overflow catch",
+    "adapted": true
+  },
+  {
+    "test": "try_arithmetic.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/SplitOperator/ovf_mul.cj"
+    ],
+    "variants": "TryNeg/Add/Sub/Mul/Div/Mod/Exp/LShift/RShift and overflow policy attributes",
+    "adapted": true
+  },
+  {
+    "test": "array_construction.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/ScalarReplacementOfArray/normal01.cj"
+    ],
+    "variants": "RawArrayAllocate, RawArrayLiteralInit, RawArrayInitByValue and array builder lambda",
+    "adapted": true
+  },
+  {
+    "test": "varray_builder.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/VArray/varray01.cj"
+    ],
+    "variants": "VArrayBuilder with captured variable and fixed size aggregate result",
+    "adapted": true
+  },
+  {
+    "test": "try_allocate_intrinsic.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/MemAccessExpr/arrayIntrinsic.cj"
+    ],
+    "variants": "TryAllocate, TryRawArrayAllocate and TryIntrinsic array access under handler",
+    "adapted": true
+  },
+  {
+    "test": "spawn.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/CallExpr/spawn.cj"
+    ],
+    "variants": "Spawn with captured scalar and Future result",
+    "adapted": true
+  },
+  {
+    "test": "try_spawn.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/ClosureConversion/spawn01.cj"
+    ],
+    "variants": "TrySpawn and exception propagation through Future.get",
+    "adapted": true
+  },
+  {
+    "test": "loop_lowering.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/AST2CHIR/forin/ham.cj"
+    ],
+    "variants": "ForInRange, ForInClosedRange, ForInIter, Branch/GoTo and loop exits",
+    "adapted": true
+  },
+  {
+    "test": "multibranch.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/Enum/enumIndex.cj"
+    ],
+    "variants": "MultiBranch lowering for constant and enum match selectors",
+    "adapted": true
+  },
+  {
+    "test": "casts_rtti.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/InstanceOf/isExpr1.cj"
+    ],
+    "variants": "InstanceOf, ClassStaticCast, RTTI on concrete and generic class/struct",
+    "adapted": true
+  },
+  {
+    "test": "cfunc_signature.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/CallExpr/nativeCall.cj"
+    ],
+    "variants": "CFunc wrapper, C struct value ABI and unsafe Apply",
+    "adapted": true
+  },
+  {
+    "test": "generic_global_function_value.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/ClosureConversion/globalFunc01.cj"
+    ],
+    "variants": "GetInstantiateValue for concrete and enclosing generic type arguments",
+    "adapted": false
+  },
+  {
+    "test": "generic_nested_closure.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/ClosureConversion/nestedFunc01.cj"
+    ],
+    "variants": "Lambda environment with enclosing generic types and generic nominal result",
+    "adapted": false
+  },
+  {
+    "test": "generic_extension_function_value.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/ClosureConversion/extendFunc01.cj"
+    ],
+    "variants": "Static generic extension function value, inherited defaults, overloaded interface bounds",
+    "adapted": false
+  },
+  {
+    "test": "vtable_value_parameter_wrapper.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/VTable/same_signature_wrapper/apply01.cj"
+    ],
+    "variants": "Virtual signature wrapper: generic parameter specialized to struct",
+    "adapted": true
+  },
+  {
+    "test": "vtable_value_return_wrapper.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/VTable/same_signature_wrapper/apply02.cj"
+    ],
+    "variants": "Virtual signature wrapper: generic return specialized to struct",
+    "adapted": true
+  },
+  {
+    "test": "vtable_multiple_parents.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/VTable/non_generic/multi_parent01.cj"
+    ],
+    "variants": "Class method fulfills interface slot inherited alongside superclass",
+    "adapted": true
+  },
+  {
+    "test": "local_const_function.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/LocalConstDecl/constFunc01.cj"
+    ],
+    "variants": "Const local function translated inside static initializer closure",
+    "adapted": false
+  },
+  {
+    "test": "unary_binary_nodes.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/AST2CHIR/BaseUseCase/binaryExpr/binaryExpr01.cj"
+    ],
+    "variants": "Neg/Not/BitNot, bitwise operators, comparisons, boolean short circuit",
+    "adapted": true
+  },
+  {
+    "test": "apply_global.cj",
+    "sources": [
+      "cjc-plugin/test/functional/global.cj (folded into this case)"
+    ],
+    "variants": "Apply: global Unit functions with Int32 and Float32 arguments",
+    "adapted": true
+  }
+]
