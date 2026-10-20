@@ -25,14 +25,14 @@ struct S2 {
 }
 
 @patchable
-func exercise(): Unit {
+func doTest(): Unit {
     var s2 = S2()
     s2.t2.t1.t0++
     println(s2.t2.t1.t0.toString())
 }
 
 main(): Int64 {
-    exercise()
+    doTest()
     println("nested_struct_increment passed")
     0
 }

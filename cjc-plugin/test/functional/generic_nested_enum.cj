@@ -30,14 +30,14 @@ func foo<T, G>(param: HHH<CA<T>, G>) {
 }
 
 @patchable
-func exercise(): Int64 {
+func doTest(): Int64 {
     foo<Int64, Int8>(HHH<CA<Int64>, Int8>.A(CA<Int64>(5)))
     foo<Int64, Int8>(HHH<CA<Int64>, Int8>.B(10, 11))
     0
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("generic_nested_enum passed")
     0

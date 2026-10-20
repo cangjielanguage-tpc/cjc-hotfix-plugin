@@ -343,7 +343,7 @@
       "testsuites/LLT/compiler/CHIR/LambdaWrapper/lambdaWrapper08.cj"
     ],
     "variants": "Function/lambda wrapper returning another function",
-    "adapted": false
+    "adapted": true
   },
   {
     "test": "pattern_interface_tuple.cj",
@@ -436,7 +436,8 @@
   {
     "test": "try_arithmetic.cj",
     "sources": [
-      "testsuites/LLT/compiler/CHIR/SplitOperator/ovf_mul.cj"
+      "testsuites/LLT/compiler/CHIR/SplitOperator/ovf_mul.cj",
+      "testsuites/LLT/compiler/CHIROpt/ConstAnalysis/arithmeticOp/exp_int_throwing.cj"
     ],
     "variants": "TryNeg/Add/Sub/Mul/Div/Mod/Exp/LShift/RShift and overflow policy attributes",
     "adapted": true
@@ -583,6 +584,57 @@
       "cjc-plugin/test/functional/global.cj (folded into this case)"
     ],
     "variants": "Apply: global Unit functions with Int32 and Float32 arguments",
+    "adapted": true
+  },
+  {
+    "test": "exceptional_array_literal.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/Exception/testTryCatch01.cj"
+    ],
+    "variants": "TryRawArrayAllocate from an array literal inside a handler",
+    "adapted": true
+  },
+  {
+    "test": "exceptional_intrinsic.cj",
+    "sources": [
+      "testsuites/LLT/compiler/Sema/function/intrinsic_check_first_class_pipline.cj",
+      "testsuites/LLT/compiler/CHIR/Exception/testTryCatch01.cj"
+    ],
+    "variants": "TryIntrinsic: direct blackBox intrinsic inside a handler",
+    "adapted": true
+  },
+  {
+    "test": "generic_recovery.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/UG/Box/box02.cj"
+    ],
+    "variants": "CastToGeneric: checked Any-to-T conversion, successful and failed casts",
+    "adapted": true
+  },
+  {
+    "test": "ordinary_arithmetic.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIROpt/ConstPropagation/simplifyBinary/div.cj",
+      "testsuites/LLT/compiler/CHIROpt/ConstPropagation/simplifyBinary/exp.cj"
+    ],
+    "variants": "Nonexceptional Mul/Div/Mod/Exp/LShift/RShift in an annotated function",
+    "adapted": true
+  },
+  {
+    "test": "iterator_lowering.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/Generic/testGeneric05.cj",
+      "testsuites/LLT/compiler/CHIR/CHIR2HLIR/typeAlias/tupleTypealias.cj"
+    ],
+    "variants": "Custom Iterable/Iterator dispatch and Option next-result loop lowering",
+    "adapted": true
+  },
+  {
+    "test": "pattern_enum_interface.cj",
+    "sources": [
+      "testsuites/LLT/compiler/CHIR/PatternMatch/testMatchWithBox03.cj"
+    ],
+    "variants": "Enum interface payload, concrete class type pattern, recovered receiver method call",
     "adapted": true
   }
 ]

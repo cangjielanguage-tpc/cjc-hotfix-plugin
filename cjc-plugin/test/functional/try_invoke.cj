@@ -23,11 +23,9 @@ func checked(value: I): Int64 {
     if (n != 8) { return 3 }
     0
 }
-@patchable
-func exercise(): Int64 { checked(C()) }
 
 main(): Int64 {
-    let result = exercise()
+    let result = checked(C())
     if (result != 0) { return 1 }
     println("try_invoke passed")
     0

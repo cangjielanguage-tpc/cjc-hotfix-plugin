@@ -19,13 +19,8 @@ func foo(): Unit {
     println(counter)
 }
 
-@patchable
-func exercise() {
-    foo()
-}
-
 main(): Int64 {
-    exercise()
+    foo()
     println("boxed_mutable_capture passed")
     0
 }

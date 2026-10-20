@@ -8,29 +8,24 @@ import hotfix.patchable
 
 @patchable
 public abstract class Event {
-  public static func getKey(): String { "Event" }
+    public static func getKey(): String { "Event" }
 }
 
 @patchable
 public open class SubEvent <: Event {
-  public static func getKey(): String { "SubEvent" }
+    public static func getKey(): String { "SubEvent" }
 }
 
 @patchable
 public class SSubEvent <: SubEvent {
-  public static func getKey(): String { "SSubEvent" }
+    public static func getKey(): String { "SSubEvent" }
 }
 
 @patchable
 public func getKey<T>(event: T): String where T <: Event { T.getKey() }
 
-@patchable
-func exercise() {
-    println(getKey(SSubEvent()))
-}
-
 main(): Int64 {
-    exercise()
+    println(getKey(SSubEvent()))
     println("invoke_static passed")
     0
 }

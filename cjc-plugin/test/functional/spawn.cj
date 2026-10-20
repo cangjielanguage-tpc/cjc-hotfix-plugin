@@ -11,15 +11,9 @@ func run(seed: Int64): Int64 {
     let future = spawn { seed + 1 }
     future.get()
 }
-@patchable
-func exercise(): Int64 {
-    if (run(3) != 4) { return 1 }
-    0
-}
 
 main(): Int64 {
-    let result = exercise()
-    if (result != 0) { return 1 }
+    if (run(3) != 4) { return 1 }
     println("spawn passed")
     0
 }

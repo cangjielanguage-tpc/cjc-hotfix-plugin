@@ -17,12 +17,12 @@ class K {
 }
 
 @patchable
-func exercise() {
+func doTest() {
     return K.z() - 2
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("local_const_function passed")
     0

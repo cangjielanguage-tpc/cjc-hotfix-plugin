@@ -14,13 +14,13 @@ extend Int64 {
 }
 
 @patchable
-func exercise() {
+func doTest() {
     var x = Int64.test
     return x() - 7
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("extension_static_value passed")
     0

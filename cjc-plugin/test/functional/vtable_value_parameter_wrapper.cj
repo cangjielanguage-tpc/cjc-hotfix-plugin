@@ -26,14 +26,14 @@ class D <: C<SA> {
 }
 
 @patchable
-func exercise(): Int64 {
+func doTest(): Int64 {
     let value: C<SA> = D()
     if (value.foo(SA(), SA()).x != 2 || C<Unit>().foo((), SA()).x != 2) { return 1 }
     0
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("vtable_value_parameter_wrapper passed")
     0

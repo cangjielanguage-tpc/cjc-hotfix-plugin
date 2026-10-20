@@ -27,7 +27,7 @@ class F <: ToString {
 }
 
 @patchable
-func exercise() {
+func doTest() {
     let r: (F) -> ToString = B<Int32>().bar<F>
     let f = F()
     f.i = 3
@@ -36,7 +36,7 @@ func exercise() {
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("generic_variant_function passed")
     0

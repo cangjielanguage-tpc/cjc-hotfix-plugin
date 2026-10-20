@@ -18,13 +18,8 @@ func foo1<TTT>(x: TTT) {
     lambda
 }
 
-@patchable
-func exercise() {
-    foo1<Int64>(1).val
-}
-
 main(): Int64 {
-    let result = exercise()
+    let result = foo1<Int64>(1).val
     if (result != 1) { return 1 }
     println("generic_nested_closure passed")
     0

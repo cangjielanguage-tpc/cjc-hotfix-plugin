@@ -24,13 +24,13 @@ extend c <: I {
 }
 
 @patchable
-func exercise() {
+func doTest() {
     var a = c()
     return a.f() - 2  
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("extension_alias passed")
     0

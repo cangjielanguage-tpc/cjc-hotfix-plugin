@@ -12,7 +12,7 @@ func foo(x: Array<Int64>) {
 }
 
 @patchable
-func exercise() {
+func doTest() {
     let a0 = Array<Int64>(1, repeat: 1)
     print(a0[0].toString()) 
     a0[0] = 2
@@ -28,7 +28,7 @@ func exercise() {
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("mutable_array passed")
     0

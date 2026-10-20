@@ -17,13 +17,13 @@ extend<T> Item<T> <: Value where T <: ToString {
 @patchable
 func read(x: Value): Int64 { x.get() }
 @patchable
-func exercise(): Int64 {
+func doTest(): Int64 {
     if (read(Item<Int64>(123)) != 3 || read(Item<String>("abcd")) != 4) { return 1 }
     0
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("extension_constrained passed")
     0

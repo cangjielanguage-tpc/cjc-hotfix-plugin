@@ -15,7 +15,7 @@ struct Value { let n = 7 }
 @patchable
 func isValue<T>(value: T): Bool { value is Value }
 @patchable
-func exercise(): Int64 {
+func doTest(): Int64 {
     let value: Any = Derived()
     if (!(value is Base) || (value as Derived).isNone() || (value as String).isSome()) { return 1 }
     if (!isValue<Value>(Value()) || isValue<Int64>(3)) { return 2 }
@@ -23,7 +23,7 @@ func exercise(): Int64 {
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("casts_rtti passed")
     0

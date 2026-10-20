@@ -17,14 +17,14 @@ struct A {
 }
 
 @patchable
-func exercise() {
+func doTest() {
     var x = A()
     x.b.bb += 3
     return x.b.bb - 4
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("nested_struct_store passed")
     0

@@ -24,7 +24,7 @@ extend Foo <: I {
 }
 
 @patchable
-func exercise() {
+func doTest() {
     var i = (10, Foo())
     var res = match (i) {
         case (10, d: I) => d.f()
@@ -39,7 +39,7 @@ func exercise() {
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("pattern_interface_tuple passed")
     0

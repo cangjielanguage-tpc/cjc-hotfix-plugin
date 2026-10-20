@@ -8,8 +8,9 @@ Closely related regression duplicates and repeated type-width cases are omitted.
 
 Each file has `main()`, explicitly annotated global functions and declaring
 types, deterministic output, and a nonempty
-`.cj.expected`. The entry wrapper checks the original result before printing its
-success marker. LLT directives/diagnostic comments are removed; license notices
+`.cj.expected`. Thin forwarding and assertion drivers are inlined into `main()` where possible.
+Nontrivial `doTest()` bodies remain patchable so their CHIR stays inside selected
+functions. Success markers are printed only after the checks pass. LLT directives/diagnostic comments are removed; license notices
 are preserved. No new stub files are generated.
 
 The matrix names intended CHIR variations. Optimizations can eliminate or rewrite
@@ -62,7 +63,7 @@ infrastructure cases are outside this standalone functional-test scope.
 | `boxed_reference_capture.cj` | Boxed local reference rebound inside recursive closure | `testsuites/LLT/compiler/CHIR/BoxingLocalMutVar/varWithTypeClass_box.cj` | Original exercise; checked output wrapper |
 | `bound_struct_method.cj` | Boxed struct receiver in bound default-interface function value | `testsuites/LLT/compiler/CHIR/AST2CHIR/Apply/boxin_lambda.cj` | Original exercise; checked output wrapper |
 | `lambda_nothing_wrapper.cj` | Lambda wrapper with Nothing parameter signature conversion | `testsuites/LLT/compiler/CHIR/LambdaWrapper/lambdaWrapper02.cj` | Original exercise; checked output wrapper |
-| `higher_order_wrapper.cj` | Function/lambda wrapper returning another function | `testsuites/LLT/compiler/CHIR/LambdaWrapper/lambdaWrapper08.cj` | Original exercise; checked output wrapper |
+| `higher_order_wrapper.cj` | Function/lambda wrapper returning another function | `testsuites/LLT/compiler/CHIR/LambdaWrapper/lambdaWrapper08.cj` | Adapted/activated with runtime checks |
 | `pattern_interface_tuple.cj` | Tuple Field, interface InstanceOf and Invoke under pattern guard | `testsuites/LLT/compiler/CHIR/PatternMatch/testMatchWithBox01.cj` | Original exercise; checked output wrapper |
 | `varray_writeback.cj` | VArray literal, indexed store, ordered index evaluation | `testsuites/LLT/compiler/CHIR/VArray/varray02.cj` | Original exercise; checked output wrapper |
 | `varray_nested_repeat.cj` | Nested VArray repeat construction and element extraction | `testsuites/LLT/compiler/CHIR/VArray/varray01.cj` | Original exercise; checked output wrapper |
@@ -93,6 +94,12 @@ infrastructure cases are outside this standalone functional-test scope.
 | `local_const_function.cj` | Const local function translated inside static initializer closure | `testsuites/LLT/compiler/CHIR/UG/LocalConstDecl/constFunc01.cj` | Original exercise; checked output wrapper |
 | `unary_binary_nodes.cj` | Neg/Not/BitNot, bitwise operators, comparisons, boolean short circuit | `testsuites/LLT/compiler/CHIR/AST2CHIR/BaseUseCase/binaryExpr/binaryExpr01.cj` | Adapted/activated with runtime checks |
 | `apply_global.cj` | Apply: global Unit functions with Int32 and Float32 arguments | `cjc-plugin/test/functional/global.cj (folded into this case)` | Adapted/activated with runtime checks |
+| `exceptional_array_literal.cj` | TryRawArrayAllocate from an array literal inside a handler | `testsuites/LLT/compiler/CHIR/Exception/testTryCatch01.cj` | Adapted/activated with runtime checks |
+| `exceptional_intrinsic.cj` | TryIntrinsic: direct blackBox intrinsic inside a handler | `testsuites/LLT/compiler/Sema/function/intrinsic_check_first_class_pipline.cj`; `testsuites/LLT/compiler/CHIR/Exception/testTryCatch01.cj` | Adapted/activated with runtime checks |
+| `generic_recovery.cj` | CastToGeneric: checked Any-to-T conversion, successful and failed casts | `testsuites/LLT/compiler/CHIR/UG/Box/box02.cj` | Adapted/activated with runtime checks |
+| `ordinary_arithmetic.cj` | Nonexceptional Mul/Div/Mod/Exp/LShift/RShift in an annotated function | `testsuites/LLT/compiler/CHIROpt/ConstPropagation/simplifyBinary/div.cj`; `testsuites/LLT/compiler/CHIROpt/ConstPropagation/simplifyBinary/exp.cj` | Adapted/activated with runtime checks |
+| `iterator_lowering.cj` | Custom Iterable/Iterator dispatch and Option next-result loop lowering | `testsuites/LLT/compiler/CHIR/Generic/testGeneric05.cj`; `testsuites/LLT/compiler/CHIR/CHIR2HLIR/typeAlias/tupleTypealias.cj` | Adapted/activated with runtime checks |
+| `pattern_enum_interface.cj` | Enum interface payload, concrete class type pattern, recovered receiver method call | `testsuites/LLT/compiler/CHIR/PatternMatch/testMatchWithBox03.cj` | Adapted/activated with runtime checks |
 
 ## Patchability boundaries
 
@@ -124,3 +131,5 @@ fixtures. `package_init.cj` retains named-package initialization coverage.
 Those four existing tests and their existing support files remain.
 
 Validation results and the complete per-test status matrix: [CHIR_TEST_RESULTS.md](CHIR_TEST_RESULTS.md).
+
+Measured opcode coverage is tracked separately in [CHIR_NODE_COVERAGE.md](CHIR_NODE_COVERAGE.md). Source labels in this table express intent, not measured node presence.

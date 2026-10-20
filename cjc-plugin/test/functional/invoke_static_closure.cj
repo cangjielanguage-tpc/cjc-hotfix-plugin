@@ -26,14 +26,8 @@ class C<T> where T <: H {
     }
 }
 
-@patchable
-func exercise() {
-    C<R>()
-    ()
-}
-
 main(): Int64 {
-    exercise()
+    C<R>()
     println("invoke_static_closure passed")
     0
 }

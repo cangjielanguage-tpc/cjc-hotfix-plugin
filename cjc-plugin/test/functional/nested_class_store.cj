@@ -25,14 +25,14 @@ class C2 {
 }
 
 @patchable
-func exercise(): Unit {
+func doTest(): Unit {
     let c2 = C2()
     c2.t2.t1.t0 += 10
     println(c2.t2.t1.t0.toString())
 }
 
 main(): Int64 {
-    exercise()
+    doTest()
     println("nested_class_store passed")
     0
 }

@@ -16,7 +16,7 @@ struct R {
 }
 
 @patchable
-func exercise() {
+func doTest() {
     let r0 = R(1)
     print(r0.t0.toString())
     var r1 = R(2)
@@ -30,7 +30,7 @@ func exercise() {
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("mutable_struct passed")
     0

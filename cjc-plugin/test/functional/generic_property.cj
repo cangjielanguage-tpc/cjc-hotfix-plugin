@@ -7,14 +7,6 @@
 import hotfix.patchable
 
 @patchable
-func exercise(): Int64 {
-    if (foo(1) != 3) {
-        return 1
-    }
-    return 0
-}
-
-@patchable
 func foo<T>(x: T): Int32 where T <: A {
     return x.n + x.m
 }
@@ -39,8 +31,9 @@ extend Int64 <: A {
 }
 
 main(): Int64 {
-    let result = exercise()
-    if (result != 0) { return 1 }
+    if (foo(1) != 3) {
+        return 1
+    }
     println("generic_property passed")
     0
 }

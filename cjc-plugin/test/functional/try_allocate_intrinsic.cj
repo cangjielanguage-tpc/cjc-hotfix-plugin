@@ -17,13 +17,13 @@ func allocate(size: Int64): Int64 {
     } catch (_: Exception) { -1 }
 }
 @patchable
-func exercise(): Int64 {
+func doTest(): Int64 {
     if (allocate(2) != 3 || allocate(0) != -1) { return 1 }
     0
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("try_allocate_intrinsic passed")
     0

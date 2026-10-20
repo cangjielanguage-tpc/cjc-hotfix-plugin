@@ -36,7 +36,7 @@ struct R {
 }
 
 @patchable
-func exercise(): Int64 {
+func doTest(): Int64 {
     var c0 = C(1)
     var r0 = R(2, c0)
     print(r0.t0.toString())
@@ -52,7 +52,7 @@ func exercise(): Int64 {
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("mut_receiver passed")
     0

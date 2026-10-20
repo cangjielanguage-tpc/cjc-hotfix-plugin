@@ -13,14 +13,14 @@ func calculate(a: Int64, b: Int64): Int64 {
     99
 }
 @patchable
-func exercise(): Int64 {
+func doTest(): Int64 {
     let complement = !Int64(0)
     if (calculate(6, 3) != -2 || complement != -1 || (false || true) != true) { return 1 }
     0
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("unary_binary_nodes passed")
     0

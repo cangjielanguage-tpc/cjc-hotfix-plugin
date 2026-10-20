@@ -29,7 +29,7 @@ extend CString <: I<Int32> & I<Bool> {
 }
 
 @patchable
-func exercise() {
+func doTest() {
     var a = Bool.foo<Bool>
     var b = Int32.goo
     var c: (Bool) -> Int64 = CString.goo
@@ -38,7 +38,7 @@ func exercise() {
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("generic_extension_function_value passed")
     0

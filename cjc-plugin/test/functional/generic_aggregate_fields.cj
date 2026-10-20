@@ -20,7 +20,7 @@ struct Pair<T, U> {
 @patchable
 func swap<T, U>(p: Pair<T, U>): Pair<U, T> { Pair<U, T>(p.second, p.first) }
 @patchable
-func exercise(): Int64 {
+func doTest(): Int64 {
     let ref = Ref<Int64>(7)
     let result = swap<Int64, Ref<Int64>>(Pair<Int64, Ref<Int64>>(3, ref))
     if (result.first.value != 7 || result.second != 3) { return 1 }
@@ -28,7 +28,7 @@ func exercise(): Int64 {
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("generic_aggregate_fields passed")
     0

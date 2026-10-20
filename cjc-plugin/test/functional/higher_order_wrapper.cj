@@ -8,6 +8,7 @@ import hotfix.patchable
 
 @patchable
 func highOrderF(fVal: (Int64, Int64) -> (Int64, Nothing) -> Int64) {
+    fVal(2, 3)
     return 2
 }
 
@@ -22,17 +23,21 @@ func foo(x: Int64, b: Int64): (Int64, Int64) -> Int64 {
 }
 
 @patchable
-func exercise() {
+func callReturned(fVal: (Int64, Int64) -> (Int64, Int64) -> Int64): Int64 {
+    fVal(2, 3)(4, 5)
+}
+@patchable
+func doTest() {
     let lambdaVal = {
         x: Int64, y: Int64 => bar
     }
-    highOrderF(foo)
-    highOrderF(lambdaVal)
+    if (highOrderF(foo) != 2 || highOrderF(lambdaVal) != 2 ||
+        callReturned(foo) != 1 || callReturned(lambdaVal) != 1) { return 1 }
     0
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("higher_order_wrapper passed")
     0

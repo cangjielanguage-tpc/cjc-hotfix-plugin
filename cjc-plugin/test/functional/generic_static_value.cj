@@ -12,12 +12,12 @@ class A<T> {
 }
 
 @patchable
-func exercise() {
+func doTest() {
     A<Int8>.cccccc - 1
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("generic_static_value passed")
     0

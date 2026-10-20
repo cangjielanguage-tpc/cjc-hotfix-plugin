@@ -10,12 +10,12 @@ let x99abc: Int64 = 100
 var y: Int64 = 100
 
 @patchable
-func exercise() {
+func doTest() {
     x99abc - y
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("global_constant passed")
     0

@@ -22,15 +22,14 @@ func payload(c: Choice): Int64 {
     match (c) { case A => 1; case B(n) => n; case C => 3 }
 }
 @patchable
-func exercise(): Int64 {
-    if (classify(0) + classify(1) + classify(2) + classify(9) != 100 ||
-        payload(A) + payload(B(7)) + payload(C) != 11) { return 1 }
-    0
+func classifyUnion(n: Int64): Int64 {
+    match (n) { case 0 | 1 | 2 => 7; case _ => 9 }
 }
 
 main(): Int64 {
-    let result = exercise()
-    if (result != 0) { return 1 }
+    if (classifyUnion(0) != 7 || classifyUnion(2) != 7 || classifyUnion(4) != 9) { return 2 }
+    if (classify(0) + classify(1) + classify(2) + classify(9) != 100 ||
+        payload(A) + payload(B(7)) + payload(C) != 11) { return 1 }
     println("multibranch passed")
     0
 }

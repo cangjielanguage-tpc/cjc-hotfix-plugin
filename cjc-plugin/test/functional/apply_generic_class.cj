@@ -14,13 +14,13 @@ class C {
 }
 
 @patchable
-func exercise() {
+func doTest() {
     var x = C()
     x.foo<Int64>()
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("apply_generic_class passed")
     0

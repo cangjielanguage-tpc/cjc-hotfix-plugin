@@ -19,7 +19,7 @@ class B {}
 extend B <: interfaceA {}
 
 @patchable
-func exercise(): Int64 {
+func doTest(): Int64 {
     var a: B = B()
     if (a.a(1) == 1) {      
         return 0
@@ -29,7 +29,7 @@ func exercise(): Int64 {
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("extension_default passed")
     0

@@ -12,7 +12,7 @@ func mayThrow(flag: Bool): Int64 {
     7
 }
 @patchable
-func exercise(): Int64 {
+func doTest(): Int64 {
     var result = 0
     try { result = mayThrow(false) } catch (_: Exception) { return 1 }
     try { mayThrow(true); return 2 } catch (e: Exception) { result += 3 } finally { result += 1 }
@@ -21,7 +21,7 @@ func exercise(): Int64 {
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("try_apply passed")
     0

@@ -20,22 +20,24 @@ struct S <: I {
 }
 
 @patchable
-func foo(x: I) {
+class Other <: I {}
+
+@patchable
+func foo(x: I): Int64 {
     match (x) {
         case v: S => v.a 
         case _ => S(1).a
     }
-    return 0
 }
 
 @patchable
-func exercise(): Int64 {
-    foo(S(1))
+func doTest(): Int64 {
+    if (foo(S(7)) != 7 || foo(Other()) != 1) { return 1 }
     0
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("box_struct_interface passed")
     0

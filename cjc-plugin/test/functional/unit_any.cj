@@ -14,15 +14,8 @@ func foo(a: ?Int): Any {
     }
 }
 
-@patchable
-func exercise() {
-    foo(Some(1))
-    0
-}
-
 main(): Int64 {
-    let result = exercise()
-    if (result != 0) { return 1 }
+    foo(Some(1))
     println("unit_any passed")
     0
 }

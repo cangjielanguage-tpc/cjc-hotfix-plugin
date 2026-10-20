@@ -8,28 +8,23 @@ import hotfix.patchable
 
 @patchable
 func foo(): Unit {
-  println("foo")
+    println("foo")
 }
 
 @patchable
 func bar(i: Int32): Unit {
-  println("bar ${i}")
+    println("bar ${i}")
 }
 
 @patchable
 func baz(f: Float32): Unit {
-  println("baz ${f}");
-}
-
-@patchable
-func exercise() {
-foo()
-  bar(42)
-  baz(3.14)
+    println("baz ${f}");
 }
 
 main(): Int64 {
-    exercise()
+    foo()
+    bar(42)
+    baz(3.14)
     println("apply_global passed")
     0
 }

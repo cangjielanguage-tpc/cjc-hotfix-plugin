@@ -24,7 +24,7 @@ extend<T> A<T> <: I {
 }
 
 @patchable
-func exercise() {
+func doTest() {
     var x = A<Int8>()
     x.foo()
     var y = A<Int8>()
@@ -33,7 +33,7 @@ func exercise() {
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("generic_extension passed")
     0

@@ -26,13 +26,13 @@ func foo(e: E) {
 }
 
 @patchable
-func exercise() {
+func doTest() {
     foo(E.B(S(), true))
     return 0
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("box_recursive_enum passed")
     0

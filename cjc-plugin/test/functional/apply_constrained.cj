@@ -16,6 +16,7 @@ open class Base {
 
 @patchable
 class A <: Base {}
+
 @patchable
 class B <: Base {}
 
@@ -27,14 +28,14 @@ func foo<T>(a: T) where T <: Base {
 }
  
 @patchable
-func exercise() {
+func doTest() {
     var a: A = A()
     var b: B = B()
     return foo<Base>(a) - foo<B>(b) + 8
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 8) { return 1 }
     println("apply_constrained passed")
     0

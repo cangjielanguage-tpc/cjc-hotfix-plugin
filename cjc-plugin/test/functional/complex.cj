@@ -39,5 +39,5 @@ class CollectionConcurrentTest {
 }
 
 main() {
-   CollectionConcurrentTest().testArrayStackConcurrent()
+    CollectionConcurrentTest().testArrayStackConcurrent()
 }

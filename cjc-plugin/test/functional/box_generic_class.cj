@@ -24,14 +24,14 @@ func foo<T>(x: T): Int64 {
 }
 
 @patchable
-func exercise(): Int64 {
+func doTest(): Int64 {
     if (foo<CA>(CA(7)) != 7) { return 1 }
     if (foo<Int64>(0) != -1) { return 2 }
     0
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("box_generic_class passed")
     0

@@ -21,7 +21,7 @@ func foo(x: C) {
 }
 
 @patchable
-func exercise() {
+func doTest() {
     let c0 = C(1)
     print(c0.t0.toString())
     c0.t0 = 2
@@ -37,7 +37,7 @@ func exercise() {
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("mutable_class passed")
     0

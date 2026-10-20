@@ -18,13 +18,13 @@ func sum(values: Array<Int64>): Int64 {
     total
 }
 @patchable
-func exercise(): Int64 {
+func doTest(): Int64 {
     if (sum([1, 2]) != 15) { return 1 }
     0
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("loop_lowering passed")
     0

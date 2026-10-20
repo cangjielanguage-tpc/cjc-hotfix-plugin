@@ -23,7 +23,7 @@ func foo2() {
 }
 
 @patchable
-func exercise() {
+func doTest() {
     var a: VArray<Int64, $2> = [1, 2]
     a[foo1()] = a[foo2()]
     if (a[1] != 1) {
@@ -33,7 +33,7 @@ func exercise() {
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("varray_writeback passed")
     0

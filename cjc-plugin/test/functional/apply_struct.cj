@@ -27,13 +27,8 @@ func test3() {
     S1.staticFoo1() - a.Foo2()
 }
 
-@patchable
-func exercise() {
-    test3()
-}
-
 main(): Int64 {
-    let result = exercise()
+    let result = test3()
     if (result != 0) { return 1 }
     println("apply_struct passed")
     0

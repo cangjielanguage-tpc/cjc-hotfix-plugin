@@ -10,15 +10,9 @@ import hotfix.patchable
 func narrow(n: Int64): Int32 {
     try { Int32(n) } catch (_: OverflowException) { -1 }
 }
-@patchable
-func exercise(): Int64 {
-    if (narrow(12) != 12 || narrow(Int64.Max) != -1) { return 1 }
-    0
-}
 
 main(): Int64 {
-    let result = exercise()
-    if (result != 0) { return 1 }
+    if (narrow(12) != 12 || narrow(Int64.Max) != -1) { return 1 }
     println("try_numeric_cast passed")
     0
 }

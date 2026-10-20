@@ -23,7 +23,7 @@ func foo2() {
 }
 
 @patchable
-func exercise() {
+func doTest() {
     let a: VArray<Int64, $2> = [1, 2]
     let arr = VArray<VArray<Int64, $2>, $5>(repeat: a)
     let c = arr[foo1()][foo2()]
@@ -31,7 +31,7 @@ func exercise() {
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("varray_nested_repeat passed")
     0

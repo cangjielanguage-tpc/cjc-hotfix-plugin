@@ -21,14 +21,24 @@ func arithmetic(a: Int64, b: Int64): Int64 {
     try { n += a >> b } catch (_: ArithmeticException) { n += 1 }
     n
 }
+@OverflowThrowing
 @patchable
-func exercise(): Int64 {
+func overflowCount(a: Int64): Int64 {
+    var caught: Int64 = 0
+    try { a + 1 } catch (_: OverflowException) { caught++ }
+    try { a * 2 } catch (_: OverflowException) { caught++ }
+    try { a ** UInt64(2) } catch (_: OverflowException) { caught++ }
+    caught
+}
+@patchable
+func doTest(): Int64 {
+    if (overflowCount(Int64.Max) != 3) { return 2 }
     if (arithmetic(2, 1) != 13) { return 1 }
     0
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("try_arithmetic passed")
     0

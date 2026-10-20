@@ -8,36 +8,36 @@ import hotfix.patchable
 
 @patchable
 class Foo {
-  func foo(): Unit {
-    println("foo")
-  }
-
-  func bar(i: Int32, o: ?Int32) {
-    let res = match(o) {
-      case Some(x) => x == i
-      case None    => false
+    func foo(): Unit {
+        println("foo")
     }
-    println(res)
-  }
 
-  static func baz(f: Float64) {
-    println("baz ${f}")
-  }
+    func bar(i: Int32, o: ?Int32) {
+        let res = match(o) {
+            case Some(x) => x == i
+            case None    => false
+        }
+        println(res)
+    }
+
+    static func baz(f: Float64) {
+        println("baz ${f}")
+    }
 }
 
 @patchable
-func exercise(): Int64 {
-let foo = Foo()
-  foo.foo()
-  foo.bar(1, Some(10))
-  foo.bar(42, Some(42))
-  foo.bar(2, None)
-  Foo.baz(3.14)
+func doTest(): Int64 {
+    let foo = Foo()
+    foo.foo()
+    foo.bar(1, Some(10))
+    foo.bar(42, Some(42))
+    foo.bar(2, None)
+    Foo.baz(3.14)
     0
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return result }
     println("apply_class passed")
     0

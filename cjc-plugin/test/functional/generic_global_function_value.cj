@@ -27,13 +27,8 @@ func goo2<U>(): Int64 {
     x()
 }
 
-@patchable
-func exercise() {
-    goo1<Int32>() + goo2<Int64>()
-}
-
 main(): Int64 {
-    let result = exercise()
+    let result = goo1<Int32>() + goo2<Int64>()
     if (result != 2) { return 1 }
     println("generic_global_function_value passed")
     0

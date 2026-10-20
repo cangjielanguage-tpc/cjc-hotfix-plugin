@@ -20,13 +20,13 @@ func advance<T>(initial: T): Int64 where T <: Increment {
     local.increment()
 }
 @patchable
-func exercise(): Int64 {
+func doTest(): Int64 {
     if (advance<Counter>(Counter()) != 2) { return 1 }
     0
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("generic_mut_receiver passed")
     0

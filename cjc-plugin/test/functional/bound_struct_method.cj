@@ -22,12 +22,12 @@ interface DefaultImpl {
 struct A <: DefaultImpl {}
 
 @patchable
-func exercise(): Unit {
+func doTest(): Unit {
     call(A().test)
 }
 
 main(): Int64 {
-    exercise()
+    doTest()
     println("bound_struct_method passed")
     0
 }

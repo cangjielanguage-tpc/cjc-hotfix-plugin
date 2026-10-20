@@ -9,50 +9,50 @@ import hotfix.patchable
 @patchable
 struct C {
     func foo<T>(): Int64 {
-    0
+        0
     }
 }
 
 @patchable
 class X <: ToString {
-  let str: String
+    let str: String
 
-  init(str: String) {
-    this.str = str
-  }
+    init(str: String) {
+        this.str = str
+    }
 
-  public override func toString(): String {
-    str
-  }
+    public override func toString(): String {
+        str
+    }
 }
 
 @patchable
 struct Foo {
-  var a: Int64
-  var b: ?Int32
-  var c: X
+    var a: Int64
+    var b: ?Int32
+    var c: X
 
-  init(a: Int64, b: ?Int32, c: X) {
-    this.a = a
-    this.b = b
-    this.c = c
-  }
-
-  func foo(): Unit {
-    println("foo ${a} ${b} ${c}")
-  }
-
-  func bar(i: Int32, o: ?Int32) {
-    let res = match(o) {
-    case Some(x) => x == i
-    case None    => false
+    init(a: Int64, b: ?Int32, c: X) {
+        this.a = a
+        this.b = b
+        this.c = c
     }
-    println(res)
-  }
+
+    func foo(): Unit {
+        println("foo ${a} ${b} ${c}")
+    }
+
+    func bar(i: Int32, o: ?Int32) {
+        let res = match(o) {
+            case Some(x) => x == i
+            case None    => false
+        }
+        println(res)
+    }
 }
 
 @patchable
-func exercise() {
+func doTest() {
     var x = C()
     if (x.foo<Int64>() != 0) { return 1 }
     let foo = Foo(42, Some(43), X("44"))
@@ -67,7 +67,7 @@ func exercise() {
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("apply_generic_struct passed")
     0

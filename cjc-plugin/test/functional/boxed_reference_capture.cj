@@ -32,13 +32,8 @@ func foo() {
     0
 }
 
-@patchable
-func exercise() { 
-    foo() 
-}
-
 main(): Int64 {
-    let result = exercise()
+    let result = foo()
     if (result != 0) { return 1 }
     println("boxed_reference_capture passed")
     0

@@ -29,7 +29,7 @@ class C2 <: A {
 }
 
 @patchable
-func exercise() {
+func doTest() {
     let a: A = C2()
     println(a.bar())
 
@@ -38,7 +38,7 @@ func exercise() {
 }
 
 main(): Int64 {
-    exercise()
+    doTest()
     println("invoke_static_instance_context passed")
     0
 }

@@ -25,7 +25,7 @@ class B<T> <: A<T> {
 }
 
 @patchable
-func exercise() {
+func doTest() {
     B<Int32>().foo<Int64>()
     B<Int32>().bar<Int32>(3)
 
@@ -36,7 +36,7 @@ func exercise() {
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("open_generic_class passed")
     0

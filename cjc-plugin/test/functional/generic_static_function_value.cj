@@ -27,14 +27,14 @@ class B<T> where T <: I<T> {
 }
 
 @patchable
-func exercise(): Int64 {
+func doTest(): Int64 {
     let a = A()
     if (B<A>().foo(a)(a) != 1) { return 1 }
     0
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("generic_static_function_value passed")
     0

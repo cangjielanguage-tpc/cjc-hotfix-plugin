@@ -3,10 +3,10 @@ package package_init
 import hotfix.patchable
 
 main() {
-  foo()
+    foo()
 }
 
 @patchable
 func foo() {
-  println("Hello")
+    println("Hello")
 }

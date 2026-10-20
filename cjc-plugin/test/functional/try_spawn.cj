@@ -16,15 +16,9 @@ func run(fail: Bool): Int64 {
         future.get()
     } catch (_: Exception) { -1 }
 }
-@patchable
-func exercise(): Int64 {
-    if (run(false) != 7 || run(true) != -1) { return 1 }
-    0
-}
 
 main(): Int64 {
-    let result = exercise()
-    if (result != 0) { return 1 }
+    if (run(false) != 7 || run(true) != -1) { return 1 }
     println("try_spawn passed")
     0
 }

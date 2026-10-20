@@ -7,7 +7,7 @@
 import hotfix.patchable
 
 @patchable
-func exercise(): Int64 {
+func doTest(): Int64 {
     let literal = [1, 2, 3]
     let repeat = Array<Int64>(3, repeat: 4)
     let built = Array<Int64>(3, {i => i + 1})
@@ -16,7 +16,7 @@ func exercise(): Int64 {
 }
 
 main(): Int64 {
-    let result = exercise()
+    let result = doTest()
     if (result != 0) { return 1 }
     println("array_construction passed")
     0
