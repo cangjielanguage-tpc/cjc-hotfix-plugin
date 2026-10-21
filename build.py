@@ -155,6 +155,8 @@ def cleanup_hotfix_lib(test_data_dir: Path) -> None:
 
 
 def plugin_excluded_tests(test_data_dir: Path, mode: str) -> set[str]:
+    if mode == "throw-stub":
+        return set()
     exclude_file = test_data_dir / ("exclude_list.stub" if mode == "stub" else "exclude_list")
     return {
         test.strip()
@@ -167,6 +169,7 @@ def run_plugin_functional_tests_at_level(args, compile_level: str, env) -> list[
     failed_tests: list[str] = []
     test_data_dir = PLUGIN_PROJECT_DIR / "test" / "functional"
     test_env = env.copy()
+    throw_stub = args.run_tests == "throw-stub"
     expected_extension = "expected.stub" if args.run_tests == "stub" else "expected"
 
     print("Building patchable hotfix lib")
@@ -197,11 +200,13 @@ def run_plugin_functional_tests_at_level(args, compile_level: str, env) -> list[
 
     for test_file in test_files:
         print(f"Test file: {test_file.name}")
-        expected_files = sorted(test_data_dir.rglob(f"{test_file.name}.{expected_extension}"))
-        if not expected_files:
-            print(f"Fail. File {test_file.name}.{expected_extension} was not found")
-            failed_tests.append(test_file.name)
-            continue
+        expected_files = []
+        if not throw_stub:
+            expected_files = sorted(test_data_dir.rglob(f"{test_file.name}.{expected_extension}"))
+            if not expected_files:
+                print(f"Fail. File {test_file.name}.{expected_extension} was not found")
+                failed_tests.append(test_file.name)
+                continue
 
         cleanup_plugin_test_outputs(test_data_dir)
         test_env["HOTFIX_STUB_MAP_FILE"] = f"{test_file.name}.stub.map"
@@ -230,6 +235,16 @@ def run_plugin_functional_tests_at_level(args, compile_level: str, env) -> list[
             continue
 
         run_result = run_command_result([test_data_dir / "main"], cwd=test_data_dir, env=test_env)
+        if throw_stub:
+            output = run_result.stdout + run_result.stderr
+            cleanup_plugin_test_outputs(test_data_dir)
+            if run_result.returncode == 1 and "Exception: should not reach here" in output.splitlines():
+                print("Passed (expected exception)")
+            else:
+                print(f"Fail. Expected Exception: should not reach here with exit status 1; "
+                      f"got exit status {run_result.returncode}\n{output}")
+                failed_tests.append(test_file.name)
+            continue
         if run_result.stderr:
             print(run_result.stderr, end="", file=sys.stderr)
         if run_result.returncode != 0:
@@ -257,6 +272,10 @@ def build_plugin(args) -> None:
     require_tool("cjpm", env)
     env["HOTFIX_STUB_TEST"] = "true" if args.run_tests == "stub" else "false"
     env.setdefault("HOTFIX_PATCH_ALL", "true")
+    if args.run_tests == "throw-stub":
+        env["HOTFIX_GEN_THROW_STUBS"] = "true"
+    else:
+        env.setdefault("HOTFIX_GEN_THROW_STUBS", "false")
     stdx_path = Path(env["CANGJIE_STDX_PATH"])
     env["LD_LIBRARY_PATH"] = os.pathsep.join(
         (
@@ -518,8 +537,8 @@ def main() -> None:
     add_shared_build_options(plugin_parser)
     plugin_parser.add_argument(
         "--run-tests",
-        choices=["normal", "stub"],
-        help="Run unit tests and functional tests in normal or stub mode",
+        choices=["normal", "stub", "throw-stub"],
+        help="Run unit tests and functional tests in normal, stub, or throw-stub mode",
     )
 
     patch_gen_parser = subparsers.add_parser("build-patch-gen", help="Build patch-gen")
