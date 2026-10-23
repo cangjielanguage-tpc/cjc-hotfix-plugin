@@ -1,0 +1,4 @@
+# Discard the synthetic wrapper that calls the removed constructor guard.
+^.*\[unreachable\].* Func @\$default\$Added\$\$init[^\n]*\$CTOR\(
+# Keep the actual constructor available to patched code.
+^(?![^\n]*\[unreachable\])[^\n]* Func @_CN7default5Added6<init>Hv\(
