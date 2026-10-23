@@ -649,12 +649,18 @@ void PatchGen::makeNewPatchableFuncsAsNonPatchable()
         }
         patchClass->SetMethods(newPatchClassMethods);
 
+        std::optional<std::string> synthCtorName;
+        if (func->IsConstructor()) {
+            synthCtorName = patchableName.genSyntheticCtorName();
+        }
+
         // Here we can't remove redundant global functions, as their references exist in vtable.
         // We don't want to use vtable CHIR C++ API as there is no stdx libchir analogue.
         // So marking these functions as unreachable lets cbc-compiler to recognize and remove them.
         std::vector<Function*> globalFuncs;
         for (const auto globalFunc : patchedPackage->GetGlobalFunctions()) {
-            if (globalFunc->GetSrcCodeIdentifier() == guardMethodName) {
+            if (globalFunc->GetSrcCodeIdentifier() == guardMethodName ||
+                (synthCtorName && globalFunc->GetSrcCodeIdentifier() == *synthCtorName)) {
                 globalFunc->EnableAttr(Attribute::UNREACHABLE);
             }
         }
