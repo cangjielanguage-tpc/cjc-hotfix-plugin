@@ -42,9 +42,9 @@ $defaultpackageInitSetter$GF
 $defaultpackageLiteralInitGetter$GF
 $defaultpackageLiteralInitSetter$GF
 $default$GVI
-$default$Patch$GC$foo1$GF
-$default$Patch$GC$foo2$GF
-$default$Patch$GC$foo3$GF
+[unreachable] $default$Patch$GC$foo1$GF
+[unreachable] $default$Patch$GC$foo2$GF
+[unreachable] $default$Patch$GC$foo3$GF
 _CINat13ArrayIteratorIG_E4nextHv$c
 types
 _CN7default1SE
