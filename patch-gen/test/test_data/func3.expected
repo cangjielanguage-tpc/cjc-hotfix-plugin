@@ -24,10 +24,10 @@ _CGP7defaultilHv
 _CGP7defaultflHv
 $default$GVI
 $default$Patch$GC$foo1$GF
-$default$Patch$GC$bar1$GF
+[unreachable] $default$Patch$GC$bar1$GF
 $default$Patch$GC$foo2$GF
-$default$Patch$GC$bar2$GF
+[unreachable] $default$Patch$GC$bar2$GF
 $default$Patch$GC$foo3$GF
-$default$Patch$GC$bar3$GF
+[unreachable] $default$Patch$GC$bar3$GF
 types
 $default$PatchImpl$GC
