@@ -62,6 +62,19 @@ class Patcher {
         genPackageInitAccessors(packageInitLiteralFlag, AccPackageLiteralInit)
     }
 
+    func replaceBodyWithThrow(fn: Function): Unit {
+        fn.returnValue = None
+        fn.body.getOrThrow().destroySelf()
+        fn.initBody()
+        let body = fn.body.getOrThrow()
+        let builder = CHIRBuilder(InsertPosition.AtEnd(body.entryBlock))
+        // A throwing function still needs a correctly typed CHIR return slot.
+        fn.returnValue = builder.createAllocate(fn.funcType.returnType).result
+        let throwingBlock = body.appendBlock()
+        builder.createGoTo(throwingBlock)
+        genShouldNotReachHere(throwingBlock)
+    }
+
     func patch(patchable: Patchable): Unit {
         if (guardVarsInitializer.isNone()) {
             let gvi = genGuardVarsInitializer()

@@ -21,6 +21,7 @@ import std.collection.*
 import std.regex.*
 import std.fs.*
 import std.io.*
+import std.env.*
 
 @When[stub_test == "true"]
 func stub(action: () -> Unit): Unit {
@@ -50,6 +51,7 @@ public class EntryPoint <: CHIRPluginBase {
 
         let patcher = Patcher(pkg, pluginContext)
         let patchables = findPatchables(pkg, tomlFilter)
+        let genThrowStubs = getVariable("HOTFIX_GEN_THROW_STUBS") == Some("true")
         for (patchable in patchables) {
             debug { =>
                 println("")
@@ -57,6 +59,9 @@ public class EntryPoint <: CHIRPluginBase {
                 println("")
                 println("Found patchable method: " + patchable.funcName.getQualifiedName() + "(" +
                     patchable.fn.identifierWithoutPrefix + ")")
+            }
+            if (genThrowStubs) {
+                patcher.replaceBodyWithThrow(patchable.fn)
             }
             patcher.patch(patchable)
         }
