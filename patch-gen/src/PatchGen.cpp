@@ -245,13 +245,20 @@ void PatchGen::markFuncsAsNonPatchable(const std::vector<Function*>& patchedGlob
 
 void PatchGen::markInternalFuncsAsNonImportedAreReachableFromPatchable()
 {
+    const auto& patchables = markContext.getPatchables();
+    const std::unordered_set<const Function*> patchableSet(patchables.begin(), patchables.end());
     std::unordered_set<const Function*> visited;
-    for (const auto patchable : markContext.getPatchables()) {
-        markInternalFuncAsNonImportedAreReachableFromPatchable(patchable, visited);
+    for (const auto patchable : patchables) {
+        markInternalFuncAsNonImportedAreReachableFromPatchable(patchable, patchableSet, visited);
     }
 }
 
-void PatchGen::markInternalFuncAsNonImportedAreReachableFromPatchable(const Function* func, std::unordered_set<const Function*>& visited)
+/**
+ * The goal of the function is to save the code of some internal functions (e.g. generic instantiated functions) are reachable from patchable functions in .chir file.
+ * Those functions should be unmarked as imported/deleted.
+ */
+void PatchGen::markInternalFuncAsNonImportedAreReachableFromPatchable(const Function* func,
+    const std::unordered_set<const Function*>& patchables, std::unordered_set<const Function*>& visited)
 {
     Visitor::Visit(
         *func, [](Expression&) { return VisitResult::CONTINUE; },
@@ -265,12 +272,16 @@ void PatchGen::markInternalFuncAsNonImportedAreReachableFromPatchable(const Func
                 callee && callee->Get<LinkTypeInfo>() == Cangjie::Linkage::INTERNAL) {
                 if (callee->IsLambda()) {
                     markContext.unmarkFuncAsDeleted(callee);
-                } else {
+                // TODO: Add a test that verifies changed internal patchable callees remain imported after their bodies move to PatchImpl.
+                // Patchable functions should be imported anyway, otherwise an inconsistency happens, when
+                // some patchable functions F is unmarked as imported, but during patch generation the F body moved to corresponding patch function in PatchImpl class,
+                // making the F body empty. Finally, we have unimported F without body, so we want to avoid such situations.
+                } else if (patchables.find(callee) == patchables.end()) {
                     markContext.unmarkFuncAsImported(callee);
                 }
                 const auto [_, added] = visited.insert(callee);
                 if (added) {
-                    markInternalFuncAsNonImportedAreReachableFromPatchable(callee, visited);
+                    markInternalFuncAsNonImportedAreReachableFromPatchable(callee, patchables, visited);
                 }
             }
 
