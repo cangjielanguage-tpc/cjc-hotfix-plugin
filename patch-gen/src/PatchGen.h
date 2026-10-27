@@ -177,7 +177,8 @@ private:
 
     void markInternalFuncsAsNonImportedAreReachableFromPatchable();
 
-    void markInternalFuncAsNonImportedAreReachableFromPatchable(const Function* func, std::unordered_set<const Function*>& visited);
+    void markInternalFuncAsNonImportedAreReachableFromPatchable(const Function* func,
+        const std::unordered_set<const Function*>& patchables, std::unordered_set<const Function*>& visited);
 
     void mark();
 

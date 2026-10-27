@@ -360,8 +360,15 @@ class Patcher {
                         break
                     }
                 }
-                let term = lastExpr(block)
-                let b = CHIRBuilder(InsertPosition.Before(term))
+                var position = InsertPosition.Before(lastExpr(block))
+                for (expr in block.exprs) {
+                    // TODO stdx.chir does not expose Intrinsic's callee kind publicly.
+                    if (expr is Intrinsic && expr.toString().contains(" = Intrinsic/Preinitialize(")) {
+                        position = InsertPosition.After(expr)
+                        break
+                    }
+                }
+                let b = CHIRBuilder(position)
                 b.createApply(gvi, FuncCallContext(Array<Value>(), Array<Type>(), None))
             }
         }
