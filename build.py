@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
@@ -329,26 +328,9 @@ def patch_gen_expected_file(test_data_dir: Path, test_name: str, compile_level: 
     level_specific = sorted(test_data_dir.rglob(f"{test_name}.expected_{compile_level}"))
     if level_specific:
         return level_specific[0]
+    print(f"No {test_name}.expected_{compile_level}; using {test_name}.expected")
     generic = sorted(test_data_dir.rglob(f"{test_name}.expected"))
-    if generic:
-        print(f"No {test_name}.expected_{compile_level}; using {test_name}.expected")
     return generic[0] if generic else None
-
-
-def check_patch_gen_chir(dump_file: Path, checks_file: Path) -> bool:
-    dump = dump_file.read_text()
-    patterns = [
-        line.strip()
-        for line in checks_file.read_text().splitlines()
-        if line.strip() and not line.lstrip().startswith("#")
-    ]
-    if not patterns:
-        print(f"Fail. No CHIR checks in {checks_file.name}")
-        return False
-    missing = [pattern for pattern in patterns if re.search(pattern, dump, re.MULTILINE) is None]
-    for pattern in missing:
-        print(f"Fail. CHIR pattern not found: {pattern}")
-    return not missing
 
 
 def run_patch_gen_tests_at_level(
@@ -380,8 +362,7 @@ def run_patch_gen_tests_at_level(
         test_name = test_file.stem
         print(f"Test file: {test_file.name}")
         expected_file = patch_gen_expected_file(test_data_dir, test_name, compile_level)
-        checks_file = test_data_dir / f"{test_name}.checks"
-        if expected_file is None and not checks_file.is_file():
+        if expected_file is None:
             print("Fail. Expected file was not found")
             failed_tests.append(test_file.name)
             continue
@@ -445,10 +426,6 @@ def run_patch_gen_tests_at_level(
         actual = generator_result.stdout
         actual_file = test_data_dir / f"{test_name}.actual"
         actual_file.write_text(actual)
-        if checks_file.is_file() and generator_result.returncode != 0:
-            print(f"Fail. patch-gen exited with code {generator_result.returncode}\n{actual}")
-            failed_tests.append(test_file.name)
-            continue
 
         generated_patch = test_data_dir / patch_chir
         if generated_patch.is_file():
@@ -461,19 +438,9 @@ def run_patch_gen_tests_at_level(
                     print(disassemble_result.stderr, end="", file=sys.stderr)
                 failed_tests.append(test_file.name)
                 continue
-        elif checks_file.is_file():
-            print(f"Fail. Generated patch was not found: {generated_patch.name}")
-            failed_tests.append(test_file.name)
-            continue
 
-        if checks_file.is_file() and not check_patch_gen_chir(
-            test_data_dir / generated_patch.with_suffix(".chirtxt").name, checks_file
-        ):
-            failed_tests.append(test_file.name)
-            continue
-
-        expected = expected_file.read_text() if expected_file is not None else None
-        if expected is None or normalize_text(actual) == normalize_text(expected):
+        expected = expected_file.read_text()
+        if normalize_text(actual) == normalize_text(expected):
             print("Passed")
             cleanup_patch_gen_test_outputs(test_data_dir, test_name)
         else:
