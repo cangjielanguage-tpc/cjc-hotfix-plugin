@@ -1,7 +1,0 @@
-# Both obsolete constructor wrappers must be unreachable.
-^.*\[unreachable\].* Func @\$default\$Added\$\$init\$\$[^$\n]+\$_Int64\$CTOR\(
-^.*\[unreachable\].* Func @\$default\$Added\$\$init\$\$[^$\n]+\$_Int64\$_Int64\$CTOR\(
-# The real constructors and the newly added global function must remain usable.
-^(?![^\n]*\[unreachable\])[^\n]* Func @_CN7default5Added6<init>Hl\(
-^(?![^\n]*\[unreachable\])[^\n]* Func @_CN7default5Added6<init>Hll\(
-^(?![^\n]*\[unreachable\])[^\n]* Func @_CN7default9makeValueHv\(

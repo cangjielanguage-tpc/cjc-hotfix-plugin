@@ -27,12 +27,6 @@ python3 build.py build-patch-gen --plugin <plugin_path> --build-type release --r
 Useful shared options are `--build-type`, `--filter-tests`, and
 `--test-compile-level`. Run `python3 build.py COMMAND --help` for details.
 
-Patch generator fixtures can check standard output with `.expected` files and
-generated CHIR with `.checks` files. Each nonempty, non-comment line in a
-`.checks` file is a regular expression matched against the `chir-dis` dump in
-multiline mode. A fixture must provide at least one of these expectation files;
-when both are present, both are checked.
-
 Build artifacts are written to `output/cjc-plugin` and `output/patch-gen`.
 Remove all artifacts with:
 

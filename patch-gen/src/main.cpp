@@ -101,6 +101,9 @@ int main(int argc, char* argv[])
 
     std::cout << "global funcs" << std::endl;
     for (const auto globalFunc : package->GetGlobalFuncsWithBody()) {
+        if (globalFunc->TestAttr(Attribute::UNREACHABLE)) {
+            std::cout << "[unreachable] ";
+        }
         std::cout << globalFunc->GetIdentifierWithoutPrefix() << std::endl;
     }
 
