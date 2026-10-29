@@ -271,7 +271,8 @@ def build_plugin(args) -> None:
     require_tool("cjc", env)
     require_tool("cjpm", env)
     env["HOTFIX_STUB_TEST"] = "true" if args.run_tests == "stub" else "false"
-    env.setdefault("HOTFIX_PATCH_ALL", "true")
+    if args.run_tests:
+        env.setdefault("HOTFIX_PATCH_ALL", "true" if args.run_tests == "throw-stub" else "false")
     if args.run_tests == "throw-stub":
         env["HOTFIX_GEN_THROW_STUBS"] = "true"
     else:
@@ -453,6 +454,8 @@ def run_patch_gen_tests_at_level(
 
 def build_patch_gen(args) -> None:
     env = os.environ.copy()
+    if args.run_tests:
+        env.setdefault("HOTFIX_PATCH_ALL", "false")
     for tool in ("cmake", "cjc"):
         require_tool(tool, env)
 

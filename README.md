@@ -26,6 +26,13 @@ Set `HOTFIX_GEN_THROW_STUBS=true` when invoking `cjc` to replace selected patcha
 bodies with throwing stubs. This runtime option is disabled by default and
 requires no plugin rebuild.
 
+`HOTFIX_PATCH_ALL` defaults to `true`, selecting all eligible functions when no
+`app-patchable` filter is present. Set `HOTFIX_PATCH_ALL=false` when invoking `cjc`
+to select only annotated functions and functions matching the filter.
+This runtime option requires no plugin rebuild. Throw-stub plugin tests default
+it to `true`; normal and stub plugin tests and patch-gen tests default it to
+`false` to test annotation-based selection.
+
 Build the patch generator and run its tests (the plugin must be built first):
 
 ```bash

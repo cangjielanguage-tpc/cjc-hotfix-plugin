@@ -6,15 +6,14 @@
  * name matches the regex filter derived from the cjpm.toml directive — and
  * returns them as a deterministically ordered, deduplicated list of Patchable.
  *
- * Note on the shipped (non-TEST) semantics: `matchesRegexpFilter` is permissive
- * when no filter is present (everything matches), matching the original build
- * without the TEST define.
+ * With no filter, HOTFIX_PATCH_ALL defaults to true and selects all otherwise eligible functions.
  */
 package hotfixplugin
 
 import stdx.chir.*
 import std.collection.*
 import std.regex.*
+import std.env.*
 
 private func isPatchableAnno(annos: Array<CustomAnnoInstance>): Bool {
     for (a in annos) {
@@ -25,19 +24,10 @@ private func isPatchableAnno(annos: Array<CustomAnnoInstance>): Bool {
     return false
 }
 
-@When[patch_all == "false"]
 private func matchesRegexpFilter(regexpFilter: ?Regex, name: String): Bool {
     match (regexpFilter) {
         case Some(r) => return r.matches(name)
-        case None => return false
-    }
-}
-
-@When[patch_all == "true"]
-private func matchesRegexpFilter(regexpFilter: ?Regex, name: String): Bool {
-    match (regexpFilter) {
-        case Some(r) => return r.matches(name)
-        case None => return true
+        case None => return (getVariable("HOTFIX_PATCH_ALL") ?? "true") == "true"
     }
 }
 
