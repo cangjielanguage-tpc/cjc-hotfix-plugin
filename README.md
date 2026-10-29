@@ -19,6 +19,10 @@ python3 build.py build-plugin --run-tests stub
 python3 build.py build-plugin --run-tests throw-stub
 ```
 
+Set `HOTFIX_STUB_TEST=true` when invoking `cjc` to enable the
+test stub patcher. This runtime option defaults to `false` and requires no
+plugin rebuild. The test runner sets it according to `--run-tests`.
+
 The `throw-stub` test mode sets `HOTFIX_GEN_THROW_STUBS=true` when running the compiler.
 It runs all functional test sources and checks for exit status 1 with
 `Exception: should not reach here`, without reading expected-output files.

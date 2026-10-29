@@ -6,7 +6,6 @@
   output-type = "dynamic"
   src-dir = "src"
   target-dir = "target"
-  compile-option = "--cfg stub_test=${HOTFIX_STUB_TEST}"
   link-option = "-L ${CANGJIE_STDX_PATH}"
 
 [dependencies]
