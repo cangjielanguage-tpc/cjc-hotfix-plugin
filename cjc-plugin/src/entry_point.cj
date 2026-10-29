@@ -23,16 +23,6 @@ import std.fs.*
 import std.io.*
 import std.env.*
 
-@When[stub_test == "true"]
-func stub(action: () -> Unit): Unit {
-    action()
-}
-
-@When[stub_test == "false"]
-func stub(_: () -> Unit): Unit {
-    // do nothing
-}
-
 public class EntryPoint <: CHIRPluginBase {
     public init() {
         super("EntryPoint")
@@ -67,7 +57,7 @@ public class EntryPoint <: CHIRPluginBase {
         }
         patcher.genPatchClass()
 
-        stub { =>
+        if (getVariable("HOTFIX_STUB_TEST") == Some("true")) {
             let patcherStub = PatcherStub(pkg)
             for (patchable in patchables) {
                 patcherStub.patch(patchable)
