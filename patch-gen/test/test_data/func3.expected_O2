@@ -2,9 +2,6 @@ global vars
 _CAO7default4bar1HvK_E
 _CAO7default4bar2HvK_E
 _CAO7default4bar3HvK_E
-$default$bar1$GVF
-$default$bar2$GVF
-$default$bar3$GVF
 global funcs
 _CAF7default4foo1Hv
 _CAO7default4foo1HvK_iiHv

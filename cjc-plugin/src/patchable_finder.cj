@@ -35,6 +35,28 @@ private func matches(annos: Array<CustomAnnoInstance>, regexpFilter: ?Regex, nam
     return isPatchableAnno(annos) || matchesRegexpFilter(regexpFilter, name)
 }
 
+private func matchesFunction(fn: Function, regexpFilter: ?Regex): Bool {
+    var current: ?Function = Some(fn)
+    let visited = HashSet<String>()
+    while (let Some(decl) <- current) {
+        if (!visited.add(decl.identifierWithoutPrefix)) {
+            break
+        }
+        if (matches(decl.customAnnoInstances, regexpFilter, PatchableName(decl).getQualifiedName())) {
+            return true
+        }
+        var parent = decl.declaredParent
+        while (let Some(owner) <- parent) {
+            if (matches(owner.customAnnoInstances, regexpFilter, PatchableName(owner).getQualifiedName())) {
+                return true
+            }
+            parent = owner.genericDecl
+        }
+        current = decl.genericDecl
+    }
+    return false
+}
+
 func findPatchables(pkg: Package, regexpFilter: ?Regex): ArrayList<Patchable> {
     let packagePatchableName = PatchableName(pkg)
     let guardVarInitializerName = packagePatchableName.genGuardVarInitializedName()
@@ -86,14 +108,7 @@ func findPatchables(pkg: Package, regexpFilter: ?Regex): ArrayList<Patchable> {
         }
 
         let funcName = PatchableName(fn)
-        var isMatch = matches(fn.customAnnoInstances, regexpFilter, funcName.getQualifiedName())
-        if (!isMatch) {
-            if (let Some(dt) <- declType) {
-                isMatch = matches(dt.customAnnoInstances, regexpFilter, PatchableName(dt).getQualifiedName())
-            }
-        }
-
-        if (isMatch) {
+        if (matchesFunction(fn, regexpFilter)) {
             let patchable = Patchable(funcName, fn)
             let added = seen.add(patchable.sortKey())
             debug { =>

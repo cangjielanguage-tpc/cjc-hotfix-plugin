@@ -315,6 +315,9 @@ public:
                   : std::nullopt,
               func->GetSrcCodeIdentifier(), std::move(func->GetFuncType()->GetParamTypes()))
     {
+        if (func->GetGenericDecl() != nullptr) {
+            instantiationSuffix = "$I$" + func->GetIdentifierWithoutPrefix();
+        }
     }
 
     std::string getClassName() const
@@ -455,6 +458,7 @@ private:
     std::optional<std::string> funcName;
     std::vector<Type*> funcParams;
     std::string qualifiedName;
+    std::string instantiationSuffix;
 
     PatchableName(std::string packageName, std::optional<std::string> className, std::optional<std::string> funcName,
         std::vector<Type*>&& funcParams)
@@ -509,7 +513,7 @@ private:
             }
         }
 
-        name += suffix;
+        name += instantiationSuffix + suffix;
 
         return name;
     }

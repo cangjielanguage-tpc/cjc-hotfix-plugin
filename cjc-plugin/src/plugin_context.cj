@@ -75,6 +75,7 @@ class PatchableName {
     let funcName: ?String
     let funcParams: Array<Type>
     let qualifiedName: String
+    private var instantiationSuffix: String = ""
 
     private init(packageName: String, className: ?String, funcName: ?String, funcParams: Array<Type>) {
         this.packageName = packageName
@@ -106,6 +107,9 @@ class PatchableName {
 
     init(fn: Function) {
         this(fn.packageName, matchParentClassName(fn), Some(fn.srcCodeName), fn.funcType.paramTypes)
+        if (fn.genericDecl.isSome()) {
+            instantiationSuffix = "$I$" + fn.identifierWithoutPrefix
+        }
     }
 
     func getClassName(): String {
@@ -217,7 +221,7 @@ class PatchableName {
             }
         }
 
-        name += suffix
+        name += instantiationSuffix + suffix
         return name
     }
 }
@@ -347,7 +351,7 @@ class Patchable {
         return false
     }
 
-    /** Dedup/order key equivalent to the C++ std::set identity. */
+    /** Keep concrete specializations distinct even when their source names match. */
     func sortKey(): String {
         let sb = StringBuilder()
         sb.append(funcName.qualifiedName)
@@ -356,6 +360,9 @@ class Patchable {
         for (p in fn.parameters) {
             sb.append("#")
             sb.append(p.ty.qualifiedName)
+        }
+        if (fn.genericDecl.isSome()) {
+            sb.append("#" + fn.identifierWithoutPrefix)
         }
         return sb.toString()
     }
