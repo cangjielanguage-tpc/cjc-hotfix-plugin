@@ -113,6 +113,7 @@ class Patcher {
 
             let baseName = baseMethod.srcCodeName
             let patchMethod = pkg.addFunction(patchMethodType, baseName, baseName, pkg.name)
+            patchMethod.genericTypeParams = baseMethod.genericTypeParams
             patchMethod.setProtected()
             patchMethod.setOverride(true)
             patchMethod.setFinal(true)
@@ -124,7 +125,6 @@ class Patcher {
             let retVal = b.createAllocate(retType)
             patchMethod.returnValue = retVal.result
 
-            // TODO (as in the C++): figure out why an Exit here fails at runtime.
             genShouldNotReachHere(body)
 
             patch.appendMethod(patchMethod)
@@ -399,6 +399,7 @@ class Patcher {
 
         let methodType = FuncType.get(methodParamTypes.toArray(), patchableMethodType.returnType)
         let method = pkg.addFunction(methodType, name, name, pkg.name)
+        method.genericTypeParams = patchable.genericTypeParams
         method.setAbstract(true)
         method.setProtected()
         // C++ also sets NO_DEBUG_INFO, COMPILER_ADD and external linkage here.
@@ -579,7 +580,8 @@ class Patcher {
         } else {
             toValues(patchable.parameters)
         }
-        let funcCallCtx = FuncCallContext(args, Array<Type>(), classRefType)
+        let typeArgs = patchable.genericTypeParams
+        let funcCallCtx = FuncCallContext(args, Array<Type>(typeArgs.size, {i => typeArgs[i]}), classRefType)
         let callContext = InvokeCallContext(caller.result, funcCallCtx, guardMethod)
         let callMethod = pb.createInvoke(funcType.returnType, callContext)
 
