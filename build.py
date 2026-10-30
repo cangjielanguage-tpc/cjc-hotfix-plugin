@@ -128,6 +128,16 @@ def normalize_text(text: str) -> list[str]:
     return [line.rstrip() for line in text.rstrip("\n").splitlines()]
 
 
+def normalize_patch_gen_output(text: str) -> list[str]:
+    lines = normalize_text(text)
+    # GetCurPkgCustomTypeDef() does not guarantee definition order. Preserve
+    # the symbol checks, including duplicates, without depending on that order.
+    if lines and lines[0] == "global vars" and "types" in lines:
+        index = lines.index("types") + 1
+        lines[index:] = sorted(lines[index:])
+    return lines
+
+
 def parse_filter_tests(filter_tests: str | None) -> set[str] | None:
     if not filter_tests:
         return None
@@ -440,7 +450,7 @@ def run_patch_gen_tests_at_level(
                 continue
 
         expected = expected_file.read_text()
-        if normalize_text(actual) == normalize_text(expected):
+        if normalize_patch_gen_output(actual) == normalize_patch_gen_output(expected):
             print("Passed")
             cleanup_patch_gen_test_outputs(test_data_dir, test_name)
         else:

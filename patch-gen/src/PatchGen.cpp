@@ -3,6 +3,7 @@
 #include "Equality.h"
 #include "cangjie/CHIR/Checker/CHIRChecker.h"
 #include "cangjie/CHIR/Serializer/CHIRSerializer.h"
+#include "cangjie/CHIR/IR/Type/PrivateTypeConverter.h"
 #include "cangjie/CHIR/Utils/Utils.h"
 
 #include <iostream>
@@ -757,6 +758,25 @@ std::unordered_set<Function*> PatchGen::genPatches()
         }
         error(patchMethod, "patch method is expected to be initialized");
 
+        // The plugin lifts the original owner's parameters into the guard
+        // method, followed by the function's own parameters. Its signature
+        // uses fresh identities; the transplanted body must use them too.
+        std::vector<GenericType*> originalTypeParams;
+        if (const auto parent = patchable->GetParentCustomTypeDef()) {
+            originalTypeParams = parent->GetGenericTypeParams();
+        }
+        const auto& funcTypeParams = patchable->GetGenericTypeParams();
+        originalTypeParams.insert(originalTypeParams.end(), funcTypeParams.begin(), funcTypeParams.end());
+        const auto& patchTypeParams = patchMethod->GetGenericTypeParams();
+        error(originalTypeParams.size() == patchTypeParams.size(),
+            "generic parameter count differs between original and patch method " + patchMethodName);
+        std::unordered_map<const GenericType*, Type*> typeReplacements;
+        for (size_t i = 0; i < originalTypeParams.size(); ++i) {
+            if (originalTypeParams[i] != patchTypeParams[i]) {
+                typeReplacements.emplace(originalTypeParams[i], patchTypeParams[i]);
+            }
+        }
+
 #if DEBUG
         std::cout << "patch method before: " << std::endl;
         std::cout << patchMethod->ToString(0) << std::endl;
@@ -852,6 +872,18 @@ std::unordered_set<Function*> PatchGen::genPatches()
                 allocUnit->MoveBefore(patchEntryBlock->GetTerminator());
                 patchMethod->SetReturnValue(*allocUnit->GetResult());
             }
+        }
+
+        if (!typeReplacements.empty()) {
+            GenericTypeConvertor genericConvertor(typeReplacements, *builder);
+            ConvertTypeFunc convertType = [&genericConvertor](Type& type) {
+                return genericConvertor.ConvertToInstantiatedType(type);
+            };
+            PrivateTypeConverter converter(convertType, *builder);
+            Visitor::Visit(*patchMethod, [&converter](Expression& expr) {
+                converter.VisitExpr(expr);
+                return VisitResult::CONTINUE;
+            });
         }
 
         enableGuardVarFlag(patchableName);

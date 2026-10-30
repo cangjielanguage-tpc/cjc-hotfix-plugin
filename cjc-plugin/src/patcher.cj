@@ -384,7 +384,8 @@ class Patcher {
             println(patchable.toString())
         }
         let gc = guardClass.getOrThrow()
-        let patchableMethodType = patchable.funcType
+        let (genericParams, replacements) = guardGenericContext(patchable, name)
+        let patchableMethodType = (replacePatchType(patchable.funcType, replacements) as FuncType).getOrThrow()
 
         let origParamTypes = patchableMethodType.paramTypes
         let methodParamTypes = ArrayList<Type>()
@@ -399,7 +400,7 @@ class Patcher {
 
         let methodType = FuncType.get(methodParamTypes.toArray(), patchableMethodType.returnType)
         let method = pkg.addFunction(methodType, name, name, pkg.name)
-        method.genericTypeParams = patchable.genericTypeParams
+        method.genericTypeParams = genericParams
         method.setAbstract(true)
         method.setProtected()
         // C++ also sets NO_DEBUG_INFO, COMPILER_ADD and external linkage here.
@@ -573,17 +574,16 @@ class Patcher {
         // C++ marks caller->GetResult() READONLY. The public stdx.chir API has
         // setReadOnly on GlobalValue, not on this LocalVar result.
 
-        let funcType = guardMethod.funcType
         let args = if (patchable.isClassConstructor() || patchable.isStructConstructor()) {
             let params = modifiedPatchable.parameters
             Array<Value>(params.size - 1, {i => params[i]})
         } else {
             toValues(patchable.parameters)
         }
-        let typeArgs = patchable.genericTypeParams
+        let typeArgs = patchTypeParams(patchable)
         let funcCallCtx = FuncCallContext(args, Array<Type>(typeArgs.size, {i => typeArgs[i]}), classRefType)
         let callContext = InvokeCallContext(caller.result, funcCallCtx, guardMethod)
-        let callMethod = pb.createInvoke(funcType.returnType, callContext)
+        let callMethod = pb.createInvoke(patchable.funcType.returnType, callContext)
 
         let resultType = callMethod.result.ty
         if (resultType.isUnitType()) {
