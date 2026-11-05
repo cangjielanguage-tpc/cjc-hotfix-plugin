@@ -1,9 +1,12 @@
 # Cangjie hotfix tools
 
-This repository contains two related tools:
+This repository contains the Cangjie compiler plugin that prepares CHIR for hot fixes:
 
 - `cjc-plugin` — a Cangjie compiler plugin that prepares CHIR for hot fixes.
-- `patch-gen` — a utility that generates a hotfix patch.
+
+The hotfix patch generator (`patch-gen`) lives in the cbc compiler repository
+(`core/cbc-patchgen`, built via `sbt cbcPatchgen/nativeImage`); its functional
+tests are in the compiler repository's `test/patchgen`.
 
 ## Environment
 
@@ -34,23 +37,17 @@ requires no plugin rebuild.
 `app-patchable` filter is present. Set `HOTFIX_PATCH_ALL=false` when invoking `cjc`
 to select only annotated functions and functions matching the filter.
 This runtime option requires no plugin rebuild. Throw-stub plugin tests default
-it to `true`; normal and stub plugin tests and patch-gen tests default it to
+it to `true`; normal and stub plugin tests default it to
 `false` to test annotation-based selection.
-
-Build the patch generator and run its tests (the plugin must be built first):
-
-```bash
-python3 build.py build-patch-gen --plugin <plugin_path> --build-type release --run-tests
-```
 
 Useful shared options are `--build-type`, `--filter-tests`, and
 `--test-compile-level`. Run `python3 build.py COMMAND --help` for details.
 
-Build artifacts are written to `output/cjc-plugin` and `output/patch-gen`.
+Build artifacts are written to `output/cjc-plugin`.
 Remove all artifacts with:
 
 ```bash
 python3 build.py clean
 ```
 
-The resulting binaries are `output/cjc-plugin/libhotfix-plugin.so` and `output/patch-gen/patch-gen` on Linux (`libhotfix-plugin.dylib` on macOS).
+The resulting binary is `output/cjc-plugin/libhotfix-plugin.so` on Linux (`libhotfix-plugin.dylib` on macOS).

@@ -10,10 +10,8 @@ import sys
 
 ROOT_DIR = Path(__file__).parent.resolve()
 PLUGIN_PROJECT_DIR = ROOT_DIR / "cjc-plugin"
-PATCH_GEN_PROJECT_DIR = ROOT_DIR / "patch-gen"
 OUTPUT_DIR = ROOT_DIR / "output"
 PLUGIN_BUILD_DIR = OUTPUT_DIR / "cjc-plugin"
-PATCH_GEN_BUILD_DIR = OUTPUT_DIR / "patch-gen"
 
 
 def run_command(command: list[object], cwd: Path | None = None, env=None) -> None:
@@ -307,201 +305,6 @@ def build_plugin(args) -> None:
     report_test_results(failed_tests)
 
 
-def cleanup_patch_gen_test_outputs(test_data_dir: Path, test_name: str | None = None) -> None:
-    patterns = ["*.cjo", "*.chirtxt", "plugin*.chir"]
-    if test_name:
-        patterns.extend(
-            (
-                f"lib{test_name}.chir",
-                f"lib{test_name}_patched.chir",
-                f"difflib{test_name}.chir",
-                f"difflib{test_name}_patched.chir",
-                f"{test_name}.actual",
-            )
-        )
-    for pattern in patterns:
-        for path in test_data_dir.glob(pattern):
-            path.unlink()
-
-
-def patch_gen_expected_file(test_data_dir: Path, test_name: str, compile_level: str) -> Path | None:
-    level_specific = sorted(test_data_dir.rglob(f"{test_name}.expected_{compile_level}"))
-    if level_specific:
-        return level_specific[0]
-    print(f"No {test_name}.expected_{compile_level}; using {test_name}.expected")
-    generic = sorted(test_data_dir.rglob(f"{test_name}.expected"))
-    return generic[0] if generic else None
-
-
-def run_patch_gen_tests_at_level(
-    args, compile_level: str, plugin_file: Path, env
-) -> list[str]:
-    failed_tests: list[str] = []
-    test_data_dir = PATCH_GEN_PROJECT_DIR / "test" / "test_data"
-    filter_tests = parse_filter_tests(args.filter_tests)
-    all_test_files = sorted(
-        path for path in test_data_dir.glob("*.cj") if not path.stem.endswith("_patched")
-    )
-    if filter_tests:
-        available = {path.name for path in all_test_files} | {path.stem for path in all_test_files}
-        missing = filter_tests - available
-        if missing:
-            print(f"Fail. Unknown tests in --filter-tests: {','.join(sorted(missing))}")
-            return sorted(missing)
-
-    print("Building patchable hotfix lib")
-    run_command(
-        ["cjc", "-p", "hotfix", "--output-type=staticlib", "-o", "hotfix.a"],
-        cwd=test_data_dir / "lib",
-        env=env,
-    )
-
-    for test_file in all_test_files:
-        if not test_matches_filter(test_file, filter_tests):
-            continue
-        test_name = test_file.stem
-        print(f"Test file: {test_file.name}")
-        expected_file = patch_gen_expected_file(test_data_dir, test_name, compile_level)
-        if expected_file is None:
-            print("Fail. Expected file was not found")
-            failed_tests.append(test_file.name)
-            continue
-
-        cleanup_patch_gen_test_outputs(test_data_dir, test_name)
-        base_chir = f"lib{test_name}.chir"
-        compile_base = [
-            "cjc",
-            "-Woff",
-            "unused",
-            test_file.name,
-            "lib/hotfix.a",
-            "--import-path",
-            "lib",
-            "--output-type=staticlib",
-            "--plugin",
-            plugin_file,
-            f"-{compile_level}",
-            "-o",
-            base_chir,
-            "--emit-chir",
-        ]
-        base_result = run_command_result(
-            compile_base, cwd=test_data_dir, env=env, stream_output=True
-        )
-        if base_result.returncode != 0:
-            if base_result.stdout:
-                print(base_result.stdout, end="")
-            if base_result.stderr:
-                print(base_result.stderr, end="", file=sys.stderr)
-            failed_tests.append(test_file.name)
-            continue
-
-        patched_file = test_data_dir / f"{test_name}_patched.cj"
-        patch_chir = f"difflib{test_name}.chir"
-        generator_command: list[object] = [PATCH_GEN_BUILD_DIR / "patch-gen", base_chir]
-        if patched_file.is_file():
-            patched_chir = f"lib{test_name}_patched.chir"
-            compile_patched = compile_base.copy()
-            compile_patched[3] = patched_file.name
-            compile_patched[-2] = patched_chir
-            patched_result = run_command_result(
-                compile_patched, cwd=test_data_dir, env=env, stream_output=True
-            )
-            if patched_result.returncode != 0:
-                if patched_result.stdout:
-                    print(patched_result.stdout, end="")
-                if patched_result.stderr:
-                    print(patched_result.stderr, end="", file=sys.stderr)
-                failed_tests.append(test_file.name)
-                continue
-            generator_command.append(patched_chir)
-            patch_chir = f"difflib{test_name}_patched.chir"
-
-        generator_result = run_command_result(
-            generator_command,
-            cwd=test_data_dir,
-            env=env,
-            combine_output=True,
-        )
-        actual = generator_result.stdout
-        actual_file = test_data_dir / f"{test_name}.actual"
-        actual_file.write_text(actual)
-
-        generated_patch = test_data_dir / patch_chir
-        if generated_patch.is_file():
-            print("Checking patch (.chir) validity using chir-dis")
-            disassemble_result = run_command_result(["chir-dis", generated_patch], cwd=test_data_dir, env=env)
-            if disassemble_result.returncode != 0:
-                if disassemble_result.stdout:
-                    print(disassemble_result.stdout, end="")
-                if disassemble_result.stderr:
-                    print(disassemble_result.stderr, end="", file=sys.stderr)
-                failed_tests.append(test_file.name)
-                continue
-
-        expected = expected_file.read_text()
-        if normalize_text(actual) == normalize_text(expected):
-            print("Passed")
-            cleanup_patch_gen_test_outputs(test_data_dir, test_name)
-        else:
-            print(f"Differs\nExpected:\n{expected}\nActual:\n{actual}")
-            failed_tests.append(test_file.name)
-
-    cleanup_patch_gen_test_outputs(test_data_dir)
-    cleanup_hotfix_lib(test_data_dir)
-    return failed_tests
-
-
-def build_patch_gen(args) -> None:
-    env = os.environ.copy()
-    if args.run_tests:
-        env.setdefault("HOTFIX_PATCH_ALL", "false")
-    for tool in ("cmake", "cjc"):
-        require_tool(tool, env)
-
-    plugin_file = Path(args.cjc_plugin_path).expanduser().resolve()
-    if not plugin_file.is_file():
-        print(f"CJC plugin library was not found: {plugin_file}")
-        sys.exit(1)
-
-    PATCH_GEN_BUILD_DIR.mkdir(parents=True, exist_ok=True)
-    tests_enabled = args.run_tests and args.build_type == "release"
-    cmake_command: list[object] = [
-        "cmake",
-        PATCH_GEN_PROJECT_DIR,
-        f"-DCANGJIE_PATH={env['CANGJIE_HOME']}",
-        f"-DCMAKE_BUILD_TYPE={args.build_type.capitalize()}",
-        f"-DTEST={'ON' if tests_enabled else 'OFF'}",
-    ]
-    run_command(cmake_command, cwd=PATCH_GEN_BUILD_DIR, env=env)
-    run_command(
-        ["cmake", "--build", ".", "--parallel"],
-        cwd=PATCH_GEN_BUILD_DIR,
-        env=env,
-    )
-
-    if not args.run_tests:
-        return
-    if not tests_enabled:
-        print("Skipping patch-gen functional tests in debug mode")
-        return
-
-    failed_tests: list[str] = []
-    for compile_level in args.test_compile_level:
-        print(
-            "------------------------------------------------\n"
-            f"Running patch-gen functional tests with -{compile_level}\n"
-            "------------------------------------------------"
-        )
-        failed_tests.extend(
-            f"{compile_level}: {test}"
-            for test in run_patch_gen_tests_at_level(
-                args, compile_level, plugin_file, env
-            )
-        )
-    report_test_results(failed_tests)
-
-
 def report_test_results(failed_tests: list[str]) -> None:
     if failed_tests:
         print("Failed tests:")
@@ -544,21 +347,6 @@ def main() -> None:
         help="Run unit tests and functional tests in normal, stub, or throw-stub mode",
     )
 
-    patch_gen_parser = subparsers.add_parser("build-patch-gen", help="Build patch-gen")
-    add_shared_build_options(patch_gen_parser)
-    patch_gen_parser.add_argument(
-        "--plugin",
-        dest="cjc_plugin_path",
-        required=True,
-        metavar="PATH",
-        help="Path to the CJC plugin shared library (.so or .dylib)",
-    )
-    patch_gen_parser.add_argument(
-        "--run-tests",
-        action="store_true",
-        help="Run functional tests after a release build",
-    )
-
     subparsers.add_parser("clean", help="Remove all build artifacts")
     args = parser.parse_args()
     if args.command != "clean" and args.filter_tests and not args.run_tests:
@@ -568,8 +356,6 @@ def main() -> None:
         clean()
     elif args.command == "build-plugin":
         build_plugin(args)
-    elif args.command == "build-patch-gen":
-        build_patch_gen(args)
 
 
 if __name__ == "__main__":
