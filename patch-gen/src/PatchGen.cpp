@@ -3,6 +3,7 @@
 #include "Equality.h"
 #include "cangjie/CHIR/Checker/CHIRChecker.h"
 #include "cangjie/CHIR/Serializer/CHIRSerializer.h"
+#include "cangjie/CHIR/IR/Type/ExtendDef.h"
 #include "cangjie/CHIR/Utils/Utils.h"
 
 #include <iostream>
@@ -10,6 +11,23 @@
 using namespace Cangjie::CHIR;
 
 namespace PatchGenerator {
+
+namespace {
+Type* bindThisType(Type& type, Type& originalThisType, CHIRBuilder& builder)
+{
+    if (type.IsThis()) {
+        return &originalThisType;
+    }
+    auto args = type.GetTypeArgs();
+    bool changed = false;
+    for (auto& arg : args) {
+        auto replacement = bindThisType(*arg, originalThisType, builder);
+        changed |= replacement != arg;
+        arg = replacement;
+    }
+    return changed ? CreateNewTypeWithArgs(type, args, builder) : &type;
+}
+} // namespace
 
 PatchGen::PatchGen(std::string fileName, Package* source, Package* patched, CHIRBuilder* builder)
     : fileName(std::move(fileName)),
@@ -784,6 +802,13 @@ std::unordered_set<Function*> PatchGen::genPatches()
             }
         }
 
+        Type* originalThisType = nullptr;
+        if (const auto parent = patchable->GetParentCustomTypeDef()) {
+            originalThisType = parent->IsExtend()
+                ? static_cast<ExtendDef*>(parent)->GetExtendedType()
+                : parent->GetType();
+        }
+
         patchMethod->ReplaceBody(*patchable->GetBody());
 
         const auto patchEntryBlock = patchMethod->GetEntryBlock();
@@ -858,6 +883,18 @@ std::unordered_set<Function*> PatchGen::genPatches()
                 allocUnit->MoveBefore(patchEntryBlock->GetTerminator());
                 patchMethod->SetReturnValue(*allocUnit->GetResult());
             }
+        }
+
+        if (originalThisType) {
+            // Call-context This referred to the original owner before moving
+            // the body. Bind it explicitly so lookup does not use PatchImpl's
+            // vtable. Receiver and runtime type-info operands stay unchanged.
+            Visitor::Visit(*patchMethod, [&](Expression& expr) {
+                if (auto call = dynamic_cast<FuncCall*>(&expr); call && call->GetThisType()) {
+                    call->SetThisType(bindThisType(*call->GetThisType(), *originalThisType, *builder));
+                }
+                return VisitResult::CONTINUE;
+            });
         }
 
         enableGuardVarFlag(patchableName);
