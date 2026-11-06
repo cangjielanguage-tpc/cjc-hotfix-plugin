@@ -675,11 +675,30 @@ void PatchGen::makeNewPatchableFuncsAsNonPatchable()
         // Here we can't remove redundant global functions, as their references exist in vtable.
         // We don't want to use vtable CHIR C++ API as there is no stdx libchir analogue.
         // So marking these functions as unreachable lets cbc-compiler to recognize and remove them.
+        Function* synthCtor = nullptr;
         std::vector<Function*> globalFuncs;
         for (const auto globalFunc : patchedPackage->GetGlobalFunctions()) {
             if (globalFunc->GetSrcCodeIdentifier() == guardMethodName ||
                 (synthCtorName && globalFunc->GetSrcCodeIdentifier() == *synthCtorName)) {
                 globalFunc->EnableAttr(Attribute::UNREACHABLE);
+            }
+            if (synthCtorName && globalFunc->GetSrcCodeIdentifier() == *synthCtorName) {
+                synthCtor = globalFunc;
+            }
+        }
+
+        // The synthetic ctor body still contains a virtual `Invoke` of the guard method that was
+        // just removed from the guard/patch classes. A virtual call to a method absent from its
+        // declared parent makes CHIRChecker fail (and crash on the error path), and a direct call
+        // isn't possible either as the guard method becomes abstract+imported. The function is
+        // unreachable, so just drop its body content, leaving only the terminator.
+        if (synthCtor && synthCtor->IsFuncWithBody()) {
+            for (const auto block : synthCtor->GetBody()->GetBlocks()) {
+                for (const auto expr : block->GetExpressions()) {
+                    if (!expr->IsTerminator()) {
+                        expr->RemoveSelfFromBlock();
+                    }
+                }
             }
         }
     }
