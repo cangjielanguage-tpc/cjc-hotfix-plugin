@@ -684,7 +684,7 @@ bool FuncCodeEquality::areEqual(const std::vector<Block*>& l, const std::vector<
 
 bool CustomDefEquality::operator()(const CustomTypeDef* l, const CustomTypeDef* r) const
 {
-    return l == r || (
+    return l == r || (l && r &&
         l->GetCustomKind() == r->GetCustomKind() &&
         l->GetPackageName() == r->GetPackageName() &&
         l->GetIdentifier() == r->GetIdentifier() &&
@@ -703,6 +703,28 @@ size_t CustomDefHasher::operator()(const CustomTypeDef* cl) const
     return seed;
 }
 
+static const CustomTypeDef* functionParentForEquality(const Function* func)
+{
+    if (const auto parent = func->GetParentCustomTypeDef()) {
+        return parent;
+    }
+    // O2 may detach an abstract method from its owner's method list while
+    // retaining the declaration. Its receiver still identifies that owner.
+    if (!func->TestAttr(Attribute::ABSTRACT) || func->TestAttr(Attribute::STATIC)) {
+        return nullptr;
+    }
+    const auto& params = func->GetFuncType()->GetParamTypes();
+    if (params.empty()) {
+        return nullptr;
+    }
+    auto receiver = params.front();
+    if (const auto ref = dynamic_cast<const RefType*>(receiver)) {
+        receiver = ref->GetBaseType();
+    }
+    const auto custom = dynamic_cast<const CustomType*>(receiver);
+    return custom ? custom->GetCustomTypeDef() : nullptr;
+}
+
 bool FunctionEquality::operator()(const Function* l, const Function* r) const
 {
     return l == r || (l->IsFuncWithBody() == r->IsFuncWithBody() &&
@@ -711,7 +733,7 @@ bool FunctionEquality::operator()(const Function* l, const Function* r) const
         l->GetIdentifier() == r->GetIdentifier() &&
         l->GetSrcCodeIdentifier() == r->GetSrcCodeIdentifier() &&
         areEqual(l->GetFuncType(), r->GetFuncType()) &&
-        areEqual(l->GetParentCustomTypeDef(), r->GetParentCustomTypeDef()));
+        areEqual(functionParentForEquality(l), functionParentForEquality(r)));
 }
 
 size_t FunctionHasher::operator()(const Function* func) const

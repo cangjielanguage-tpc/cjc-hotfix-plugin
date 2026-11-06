@@ -27,6 +27,7 @@ class Patcher {
     let pkg: Package
     let pluginCtx: PluginContext
     let packageInitFlag: GlobalVar
+    let packageInitAccessors = ArrayList<(GlobalVar, Function, Function)>()
 
     // Lazily initialized on the first `patch` call.
     var guardVarsInitializer: ?Function = None
@@ -37,6 +38,38 @@ class Patcher {
         this.pkg = pkg
         this.pluginCtx = pluginCtx
         this.packageInitFlag = findGlobalVar(pkg, "$has_applied_pkg_init_func")
+
+        // Differential annotation factories import their backing data from the
+        // native executable, so export the package-owned globals they access.
+        for (fn in pkg.functions) {
+            // Struct constructors and mut methods remain native. Keep their bodies available
+            // for comparison in both the stub and patched package at O2.
+            if (!fn.isImported() && fn.packageName == pkg.name && (fn.isStructConstructor() || fn.isMut())) {
+                fn.setNoInline(true)
+            }
+            if (!fn.isImported() && fn.packageName == pkg.name && fn.isAnnoFactoryFunc()) {
+                if (let Some(body) <- fn.body) {
+                    let blocks = ArrayList<Block>(body.blocks)
+                    var index = 0
+                    while (index < blocks.size) {
+                        let block = blocks[index]
+                        index++
+                        for (expr in block.exprs) {
+                            for (operand in expr.operands) {
+                                if (let Some(gv) <- (operand as GlobalVar)) {
+                                    if (!gv.isImported() && gv.packageName == pkg.name) {
+                                        gv.setLinkageType(LinkType.External)
+                                    }
+                                }
+                            }
+                            for (group in expr.blockGroups) {
+                                blocks.add(all: group.blocks)
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         let packageInitGuardClass = genPackageInitGuardClass()
         let packageInitGuardClassType = packageInitGuardClass.classType
@@ -54,7 +87,7 @@ class Patcher {
 
         genPackageInitGuardChecks(pkg.packageInitFunc.getOrThrow(), packageInitGuardClassType, packageInitGuardVar,
             packageInitGuardVarFlag, guardClassMethods[0], guardClassCtor)
-        genPackageInitGuardChecks(findPackageLiteralInitFunc(pkg), packageInitGuardClassType,
+        genPackageInitGuardChecks(pkg.packageLiteralInitFunc.getOrThrow(), packageInitGuardClassType,
             packageInitGuardVar, packageInitGuardVarFlag, guardClassMethods[1], guardClassCtor)
 
         let packageInitLiteralFlag = findGlobalVar(pkg, "has_invoked_pkg_init_literal")
@@ -76,6 +109,10 @@ class Patcher {
     }
 
     func patch(patchable: Patchable): Unit {
+        // Differential patches resolve calls to the original native function.
+        patchable.fn.setLinkageType(LinkType.External)
+        // O2 must not embed a patchable implementation into unchanged callers.
+        patchable.fn.setNoInline(true)
         if (guardVarsInitializer.isNone()) {
             let gvi = genGuardVarsInitializer()
             guardVarsInitializer = gvi
@@ -113,6 +150,7 @@ class Patcher {
 
             let baseName = baseMethod.srcCodeName
             let patchMethod = pkg.addFunction(patchMethodType, baseName, baseName, pkg.name)
+            patchMethod.genericTypeParams = baseMethod.genericTypeParams
             patchMethod.setProtected()
             patchMethod.setOverride(true)
             patchMethod.setFinal(true)
@@ -148,7 +186,9 @@ class Patcher {
         let cl = pkg.addClass(clName, clName, true)
         cl.superClass = pluginCtx.objectType
         cl.setOpen(true)
-        cl.setInternal()
+        // CBC supplies implementations outside the native compilation.
+        // Public visibility prevents --no-sub-pkg from closing dispatch.
+        cl.setPublic()
         // C++ also marks this class COMPILER_ADD and external. Public stdx.chir
         // does not expose those setters.
 
@@ -285,6 +325,8 @@ class Patcher {
         let getterType = FuncType.get(Array<Type>(), BoolType.get())
         let getter = pkg.addFunction(getterType, getterName, getterName, pkg.name)
         getter.setInternal()
+        getter.setLinkageType(LinkType.External)
+        getter.setNoInline(true)
         getter.initBody()
         let getterEntry = getter.body.getOrThrow().entryBlock
         let gb = CHIRBuilder(InsertPosition.AtEnd(getterEntry))
@@ -296,12 +338,15 @@ class Patcher {
 
         let setterName = packagePatchableName.genPackageInitFlagAccessor(kind, false)
         let setter = createEmptyFunctionWithUnitRetVal(setterName, [BoolType.get()])
+        setter.setLinkageType(LinkType.External)
+        setter.setNoInline(true)
         let setterEntry = setter.body.getOrThrow().entryBlock
         let sb = CHIRBuilder(InsertPosition.AtEnd(setterEntry))
         sb.createStore(setter.parameters[0], flag)
         let unitConst = sb.createConstant(UnitLiteral.get())
         sb.createStore(unitConst.result, setter.returnValue.getOrThrow())
         sb.createExit()
+        packageInitAccessors.add((flag, getter, setter))
 
         debug { =>
             println("getter for package init:")
@@ -311,13 +356,52 @@ class Patcher {
         }
     }
 
+    // Run after guard/stub generation: GVI insertion still recognizes the
+    // original flag stores. Rewrite only package inits, never the accessors.
+    func rewritePackageInitFlagAccesses(): Unit {
+        let initializers = [pkg.packageInitFunc.getOrThrow(), pkg.packageLiteralInitFunc.getOrThrow()]
+        for (initializer in initializers) {
+            let blocks = ArrayList<Block>(initializer.body.getOrThrow().blocks)
+            var index = 0
+            while (index < blocks.size) {
+                let block = blocks[index]
+                index++
+                // exprs returns a snapshot, so replacing expressions is safe.
+                for (expr in block.exprs) {
+                    for (group in expr.blockGroups) {
+                        blocks.add(all: group.blocks)
+                    }
+                    for ((flag, getter, setter) in packageInitAccessors) {
+                        let isLoad = if (let Some(load) <- (expr as Load)) { load.srcAddress == flag } else { false }
+                        let isStore = if (let Some(store) <- (expr as Store)) { store.dstAddress == flag } else { false }
+                        if (!isLoad && !isStore) {
+                            continue
+                        }
+                        let b = CHIRBuilder(InsertPosition.Before(expr))
+                        let replacement = if (isLoad) {
+                            b.createApply(getter, FuncCallContext(Array<Value>(), Array<Type>(), None))
+                        } else {
+                            let store = (expr as Store).getOrThrow()
+                            b.createApply(setter, FuncCallContext([store.srcValue], Array<Type>(), None))
+                        }
+                        expr.result.replaceWith(replacement.result)
+                        expr.destroySelf()
+                        break
+                    }
+                }
+            }
+        }
+    }
+
     /* [abstract] class $Patch <: Object {} */
     func genGuardClass(): ClassLikeDef {
         let name = PatchableName(pkg).genGuardClassName(false)
         let cl = pkg.addClass(name, name, true)
         cl.superClass = pluginCtx.objectType
         cl.setAbstract(true)
-        cl.setInternal()
+        // CBC supplies subclasses outside the native compilation.
+        // Public visibility prevents --no-sub-pkg from closing dispatch.
+        cl.setPublic()
         // C++ marks the class COMPILER_ADD and external. Public stdx.chir does
         // not expose those setters.
         debug { =>
@@ -347,6 +431,8 @@ class Patcher {
     func genGuardVarsInitializer(): Function {
         let gviName = PatchableName(pkg).genGuardVarInitializedName()
         let gvi = createEmptyFunctionWithUnitRetVal(gviName, Array<Type>())
+        // patch-gen needs this body to instantiate PatchImpl after optimization.
+        gvi.setNoInline(true)
 
         let entry = gvi.body.getOrThrow().entryBlock
         CHIRBuilder(InsertPosition.AtEnd(entry)).createExit()
@@ -399,7 +485,10 @@ class Patcher {
 
         let methodType = FuncType.get(methodParamTypes.toArray(), patchableMethodType.returnType)
         let method = pkg.addFunction(methodType, name, name, pkg.name)
+        method.genericTypeParams = patchable.genericTypeParams
         method.setAbstract(true)
+        // Keep unused abstract guards in the method list during O2 DCE.
+        method.setOpen(true)
         method.setProtected()
         // C++ also sets NO_DEBUG_INFO, COMPILER_ADD and external linkage here.
         // Public stdx.chir does not expose those setters.
@@ -579,7 +668,8 @@ class Patcher {
         } else {
             toValues(patchable.parameters)
         }
-        let funcCallCtx = FuncCallContext(args, Array<Type>(), classRefType)
+        let typeArgs = patchable.genericTypeParams
+        let funcCallCtx = FuncCallContext(args, Array<Type>(typeArgs.size, {i => typeArgs[i]}), classRefType)
         let callContext = InvokeCallContext(caller.result, funcCallCtx, guardMethod)
         let callMethod = pb.createInvoke(funcType.returnType, callContext)
 
@@ -688,13 +778,4 @@ func findGlobalVar(pkg: Package, name: String): GlobalVar {
         }
     }
     throw Exception("unable to find global var " + name)
-}
-
-func findPackageLiteralInitFunc(pkg: Package): Function {
-    for (fn in pkg.functions) {
-        if (fn.packageName == pkg.name && fn.srcCodeName.startsWith("_CGP") && fn.srcCodeName.endsWith("ilHv")) {
-            return fn
-        }
-    }
-    throw Exception("unable to find package literal init function")
 }

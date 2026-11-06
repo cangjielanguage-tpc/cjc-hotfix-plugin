@@ -64,6 +64,8 @@ public class EntryPoint <: CHIRPluginBase {
             }
         }
 
+        patcher.rewritePackageInitFlagAccesses()
+
         debug { =>
             dumpSerializedPackage(pkg)
             println("Finished running Hotfix plugin")

@@ -173,6 +173,12 @@ void PatchGen::mark()
 
             // TODO support lambdas and generics
             const auto patchedGlobalFunc = patchedGlobalFuncsSet.find(sourceFunc);
+            if (patchedGlobalFunc == patchedGlobalFuncsSet.end() &&
+                (sourceFunc->TestAttr(Attribute::IMPORTED) || sourceFunc->GetPackageName() != packageName)) {
+                // Optimization may remove an unused import. Its definition is
+                // owned by another package, so it is not a deleted patch target.
+                continue;
+            }
             error(patchedGlobalFunc != patchedGlobalFuncsSet.end(),
                 "func " + sourceFunc->GetIdentifierWithoutPrefix() + " was not found in patched version");
             markFunc(sourceFunc, *patchedGlobalFunc);
@@ -447,7 +453,8 @@ void PatchGen::removeRedundantFunctions() const
 }
 
 /*
-  Replace access to package inits flags to corresponding accessors' call.
+  Replace direct accesses from older plugin outputs with accessor calls.
+  Current plugin outputs already use these calls before compiler optimization.
 */
 void PatchGen::updatePackageInits() const
 {
@@ -615,8 +622,8 @@ void PatchGen::removeGuardChecks(const Function* patchable) const
 /**
  * - Removes guard checks for the function
  * - Remove corresponding guard var
- * - Remove corresponding methods in guard/patch classes
- * - Mark corresponding global functions as unreachable
+ * - Preserve guard methods that occupy native vtable slots
+ * - Remove guard methods without native slots and mark them unreachable
  * // TODO remove @patchable AnnoInfo, if possible
  */
 void PatchGen::makeNewPatchableFuncsAsNonPatchable()
@@ -631,6 +638,19 @@ void PatchGen::makeNewPatchableFuncsAsNonPatchable()
 
     patchClass = findPatchClass(patchedPackage, guardClass);
     error(patchClass, "patch class is expected to be initialized");
+
+    std::unordered_set<std::string> nativeGuardMethods;
+    if (sourcePackage) {
+        if (const auto sourceGuardClass = findGuardClass(sourcePackage)) {
+            // O2 can detach abstract declarations from the method list. The
+            // native vtable still records their slots and is the ABI contract.
+            for (const auto& table : sourceGuardClass->GetDefVTable().GetTypeVTables()) {
+                for (const auto& method : table.GetVirtualMethods()) {
+                    nativeGuardMethods.insert(method.GetVirtualMethod()->GetSrcCodeIdentifier());
+                }
+            }
+        }
+    }
 #if DEBUG
     std::cout << "patch class:" << std::endl;
     std::cout << patchClass->ToString() << std::endl;
@@ -650,6 +670,11 @@ void PatchGen::makeNewPatchableFuncsAsNonPatchable()
         patchedPackage->SetAllGlobalVars(std::move(newGlobalVars));
 
         const auto guardMethodName = patchableName.genGuardMethodName(PatchableName::GuardMethodKind::PLAIN);
+        if (nativeGuardMethods.count(guardMethodName) != 0) {
+            // Keep the declaration and throwing implementation so CBC cannot
+            // compact this slot and invalidate native callers' method offsets.
+            continue;
+        }
 
         std::vector<Function*> newGuardClassMethod;
         for (const auto method : guardClass->GetMethods()) {
@@ -672,10 +697,8 @@ void PatchGen::makeNewPatchableFuncsAsNonPatchable()
             synthCtorName = patchableName.genSyntheticCtorName();
         }
 
-        // Here we can't remove redundant global functions, as their references exist in vtable.
-        // We don't want to use vtable CHIR C++ API as there is no stdx libchir analogue.
-        // So marking these functions as unreachable lets cbc-compiler to recognize and remove them.
-        std::vector<Function*> globalFuncs;
+        // These guards have no slot in the native executable, so CBC may omit
+        // them without changing the layout expected by existing native calls.
         for (const auto globalFunc : patchedPackage->GetGlobalFunctions()) {
             if (globalFunc->GetSrcCodeIdentifier() == guardMethodName ||
                 (synthCtorName && globalFunc->GetSrcCodeIdentifier() == *synthCtorName)) {
