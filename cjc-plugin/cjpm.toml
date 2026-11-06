@@ -25,3 +25,6 @@
 [target.aarch64-apple-darwin.bin-dependencies.package-option]
   "stdx.chir" = "${CANGJIE_STDX_PATH}/stdx.chir.cjo"
   "stdx.plugin.manager" = "${CANGJIE_STDX_PATH}/stdx.plugin.manager.cjo"
+
+[profile.customized-option]
+  sdk = '--cfg="version=${HOTFIX_VERSION}"'

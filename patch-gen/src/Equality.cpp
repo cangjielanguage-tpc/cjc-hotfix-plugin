@@ -1,6 +1,7 @@
 #include "Equality.h"
 
 #include "cangjie/CHIR/Analysis/ValueDomain.h"
+#include "cangjie/CHIR/IR/Type/ExtendDef.h"
 #include "cangjie/CHIR/Utils/Utils.h"
 
 namespace Cangjie::CHIR {
@@ -684,11 +685,26 @@ bool FuncCodeEquality::areEqual(const std::vector<Block*>& l, const std::vector<
 
 bool CustomDefEquality::operator()(const CustomTypeDef* l, const CustomTypeDef* r) const
 {
-    return l == r || (
-        l->GetCustomKind() == r->GetCustomKind() &&
-        l->GetPackageName() == r->GetPackageName() &&
-        l->GetIdentifier() == r->GetIdentifier() &&
-        l->GetSrcCodeIdentifier() == r->GetSrcCodeIdentifier());
+    if (l == r) {
+        return true;
+    }
+    if (!l || !r || l->GetCustomKind() != r->GetCustomKind() ||
+        l->GetPackageName() != r->GetPackageName() || l->GetSrcCodeIdentifier() != r->GetSrcCodeIdentifier()) {
+        return false;
+    }
+    if (l->IsExtend()) {
+        // Instantiated extension identifiers contain a compilation-unit suffix.
+        // Match the extended type and interfaces across base/patched packages
+        // instead of treating unchanged specialized methods as new functions.
+        const auto left = static_cast<const ExtendDef*>(l);
+        const auto right = static_cast<const ExtendDef*>(r);
+        const auto leftInterfaces = left->GetImplementedInterfaceTys();
+        const auto rightInterfaces = right->GetImplementedInterfaceTys();
+        return areEqual(left->GetExtendedType(), right->GetExtendedType()) &&
+            std::equal(leftInterfaces.begin(), leftInterfaces.end(), rightInterfaces.begin(), rightInterfaces.end(),
+                [](ClassType* a, ClassType* b) { return areEqual(a, b); });
+    }
+    return l->GetIdentifier() == r->GetIdentifier();
 }
 
 size_t CustomDefHasher::operator()(const CustomTypeDef* cl) const
@@ -698,9 +714,33 @@ size_t CustomDefHasher::operator()(const CustomTypeDef* cl) const
     }
     size_t seed = 0;
     Cangjie::hash_combine(seed, cl->GetPackageName());
-    Cangjie::hash_combine(seed, cl->GetIdentifier());
+    if (!cl->IsExtend()) {
+        Cangjie::hash_combine(seed, cl->GetIdentifier());
+    }
     Cangjie::hash_combine(seed, cl->GetSrcCodeIdentifier());
     return seed;
+}
+
+static const CustomTypeDef* functionParentForEquality(const Function* func)
+{
+    if (const auto parent = func->GetParentCustomTypeDef()) {
+        return parent;
+    }
+    // O2 may detach an abstract method from its owner's method list while
+    // retaining the declaration. Its receiver still identifies that owner.
+    if (!func->TestAttr(Attribute::ABSTRACT) || func->TestAttr(Attribute::STATIC)) {
+        return nullptr;
+    }
+    const auto& params = func->GetFuncType()->GetParamTypes();
+    if (params.empty()) {
+        return nullptr;
+    }
+    auto receiver = params.front();
+    if (const auto ref = dynamic_cast<const RefType*>(receiver)) {
+        receiver = ref->GetBaseType();
+    }
+    const auto custom = dynamic_cast<const CustomType*>(receiver);
+    return custom ? custom->GetCustomTypeDef() : nullptr;
 }
 
 bool FunctionEquality::operator()(const Function* l, const Function* r) const
@@ -711,7 +751,7 @@ bool FunctionEquality::operator()(const Function* l, const Function* r) const
         l->GetIdentifier() == r->GetIdentifier() &&
         l->GetSrcCodeIdentifier() == r->GetSrcCodeIdentifier() &&
         areEqual(l->GetFuncType(), r->GetFuncType()) &&
-        areEqual(l->GetParentCustomTypeDef(), r->GetParentCustomTypeDef()));
+        areEqual(functionParentForEquality(l), functionParentForEquality(r)));
 }
 
 size_t FunctionHasher::operator()(const Function* func) const
