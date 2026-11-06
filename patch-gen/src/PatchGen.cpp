@@ -675,12 +675,50 @@ void PatchGen::makeNewPatchableFuncsAsNonPatchable()
         // Here we can't remove redundant global functions, as their references exist in vtable.
         // We don't want to use vtable CHIR C++ API as there is no stdx libchir analogue.
         // So marking these functions as unreachable lets cbc-compiler to recognize and remove them.
+        Function* synthCtor = nullptr;
         std::vector<Function*> globalFuncs;
         for (const auto globalFunc : patchedPackage->GetGlobalFunctions()) {
             if (globalFunc->GetSrcCodeIdentifier() == guardMethodName ||
                 (synthCtorName && globalFunc->GetSrcCodeIdentifier() == *synthCtorName)) {
                 globalFunc->EnableAttr(Attribute::UNREACHABLE);
             }
+            if (synthCtorName && globalFunc->GetSrcCodeIdentifier() == *synthCtorName) {
+                synthCtor = globalFunc;
+            }
+        }
+
+        // The synthetic ctor body still contains a virtual `Invoke` of the guard method that was
+        // just removed from the guard/patch classes. A virtual call to a method absent from its
+        // declared parent makes CHIRChecker fail (and crash on the error path), and a direct call
+        // isn't possible either as the guard method becomes abstract+imported. The function is
+        // unreachable, so replace its body with a "should not reach here" stub (same as the
+        // guard method stubs): raise an Exception if it is ever reached at runtime.
+        if (synthCtor && synthCtor->IsFuncWithBody()) {
+            const auto entryBlock = synthCtor->GetBody()->GetEntryBlock();
+            for (const auto expr : entryBlock->GetExpressions()) {
+                if (!expr->IsTerminator()) {
+                    expr->RemoveSelfFromBlock();
+                }
+            }
+            const auto oldTerminator = entryBlock->GetTerminator();
+            const auto msg = builder->CreateConstantExpression<StringLiteral>(
+                builder->GetStringTy(), entryBlock, "should not reach here");
+            msg->MoveBefore(oldTerminator);
+            const auto exceptionType = exceptionDef->GetType();
+            const auto exception = builder->CreateExpression<Allocate>(
+                builder->GetType<RefType>(exceptionType), exceptionType, entryBlock);
+            exception->MoveBefore(oldTerminator);
+            const auto initCall = builder->CreateExpression<Apply>(exceptionInitDef->GetReturnType(), exceptionInitDef,
+                FuncCallContext{
+                    .args = {exception->GetResult(), msg->GetResult()},
+                    .instTypeArgs = {},
+                    .thisType = builder->GetType<RefType>(exceptionType),
+                },
+                entryBlock);
+            initCall->MoveBefore(oldTerminator);
+            oldTerminator->RemoveSelfFromBlock();
+            const auto raise = builder->CreateTerminator<RaiseException>(exception->GetResult(), entryBlock);
+            entryBlock->AppendExpression(raise);
         }
     }
 }
