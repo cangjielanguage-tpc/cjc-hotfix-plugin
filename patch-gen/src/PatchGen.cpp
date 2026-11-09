@@ -696,31 +696,44 @@ void PatchGen::makeNewPatchableFuncsAsNonPatchable()
         if (synthCtor && synthCtor->IsFuncWithBody()) {
             const auto entryBlock = synthCtor->GetBody()->GetEntryBlock();
             for (const auto expr : entryBlock->GetExpressions()) {
-                if (!expr->IsTerminator()) {
-                    expr->RemoveSelfFromBlock();
-                }
+                expr->RemoveSelfFromBlock();
             }
-            const auto oldTerminator = entryBlock->GetTerminator();
-            const auto msg = builder->CreateConstantExpression<StringLiteral>(
-                builder->GetStringTy(), entryBlock, "should not reach here");
-            msg->MoveBefore(oldTerminator);
-            const auto exceptionType = exceptionDef->GetType();
-            const auto exception = builder->CreateExpression<Allocate>(
-                builder->GetType<RefType>(exceptionType), exceptionType, entryBlock);
-            exception->MoveBefore(oldTerminator);
-            const auto initCall = builder->CreateExpression<Apply>(exceptionInitDef->GetReturnType(), exceptionInitDef,
-                FuncCallContext{
-                    .args = {exception->GetResult(), msg->GetResult()},
-                    .instTypeArgs = {},
-                    .thisType = builder->GetType<RefType>(exceptionType),
-                },
-                entryBlock);
-            initCall->MoveBefore(oldTerminator);
-            oldTerminator->RemoveSelfFromBlock();
-            const auto raise = builder->CreateTerminator<RaiseException>(exception->GetResult(), entryBlock);
-            entryBlock->AppendExpression(raise);
+            genShouldNotReachHere(*entryBlock);
         }
     }
+}
+
+/*
+  CHIR pseudocode (same as in cjc-plugin patcher):
+
+  Block #0:
+    %0: Struct-_CNat6StringE = Constant("should not reach here")
+    %1: Class-_CNat9ExceptionE& = Allocate(Class-_CNat9ExceptionE)
+    %2: Void = Apply(Class-_CNat9ExceptionE&->@_CNat9Exception6<init>HRNat6StringE, %1, %0)
+    RaiseException(%1)
+ */
+void PatchGen::genShouldNotReachHere(Block& block) const
+{
+    const auto errMsg = builder->CreateConstantExpression<StringLiteral>(
+        builder->GetStringTy(), &block, "should not reach here");
+    block.AppendExpression(errMsg);
+
+    const auto exceptionType = exceptionDef->GetType();
+    const auto exception = builder->CreateExpression<Allocate>(
+        builder->GetType<RefType>(exceptionType), exceptionType, &block);
+    block.AppendExpression(exception);
+
+    const auto initCall = builder->CreateExpression<Apply>(exceptionInitDef->GetReturnType(), exceptionInitDef,
+        FuncCallContext{
+            .args = {exception->GetResult(), errMsg->GetResult()},
+            .instTypeArgs = {},
+            .thisType = builder->GetType<RefType>(exceptionType),
+        },
+        &block);
+    block.AppendExpression(initCall);
+
+    const auto raise = builder->CreateTerminator<RaiseException>(exception->GetResult(), &block);
+    block.AppendExpression(raise);
 }
 
 /*

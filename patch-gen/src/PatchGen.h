@@ -195,6 +195,8 @@ private:
 
     void enableGuardVarFlag(const PatchableName& patchableName) const;
 
+    void genShouldNotReachHere(Block& block) const;
+
     void makeNewPatchableFuncsAsNonPatchable();
 
     void importFuncs(const std::unordered_set<Function*>& patches) const;
