@@ -9,7 +9,7 @@ cjc_opt_level=$4
 shift 4
 filter_tests=("$@")
 
-diff_generator="$build_dir/chir-diff"
+diff_generator="$build_dir/patch-gen"
 envsetup=$cangjie_home/"envsetup.sh"
 
 if [[ ! -f $envsetup ]]; then

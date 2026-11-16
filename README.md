@@ -39,4 +39,4 @@ Remove all artifacts with:
 python3 build.py clean
 ```
 
-The resulting binaries are `output/cjc-plugin/libhotfix-plugin.so` and `output/patch-gen/chir-diff` on Linux (`libhotfix-plugin.dylib` on macOS).
+The resulting binaries are `output/cjc-plugin/libhotfix-plugin.so` and `output/patch-gen/patch-gen` on Linux (`libhotfix-plugin.dylib` on macOS).
