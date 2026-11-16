@@ -43,8 +43,9 @@ for file in *.cj; do
     rm -f *.cjo
     rm -f *.cjo.flag
 
-    # TODO -Z, -u are not supported on macos
-    if diff -Z -u <(echo "$actual_data") <(echo "$expected_data"); then
+    # compare output while ignoring trailing whitespace
+    if diff -u <(printf '%s\n' "$actual_data" | sed 's/[[:space:]]*$//') \
+               <(printf '%s\n' "$expected_data" | sed 's/[[:space:]]*$//'); then
       echo "Passed"
     else
       echo "Failed"
