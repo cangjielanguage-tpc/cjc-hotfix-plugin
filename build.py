@@ -573,8 +573,8 @@ def add_shared_build_options(parser: argparse.ArgumentParser) -> None:
         "--test-compile-level",
         nargs="+",
         choices=["O0", "O1", "O2"],
-        default=["O0", "O1"], # TODO enable O2 tests when plugin performance is improved
-        help="Compiler optimization levels for functional tests (default: O0 O1)",
+        default=["O0", "O1", "O2"],
+        help="Compiler optimization levels for functional tests (default: O0 O1 O2)",
     )
 
 

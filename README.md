@@ -91,9 +91,9 @@ example_test # Explain the SDK limitation that prevents this test from passing.
 ```
 
 Skips are printed. Missing lists or version directories exclude nothing; create
-lists only when there are tests to skip. Default functional test levels are O0
-and O1; request O2 with `--test-compile-level`. Tests write temporary files into
-`tests_data/`, so run SDK/mode test commands sequentially.
+lists only when there are tests to skip. Default functional test levels are O0,
+O1, and O2; select a subset with `--test-compile-level`. Tests write temporary
+files into `tests_data/`, so run SDK/mode test commands sequentially.
 
 Useful shared options are `--build-type`, `--filter-tests`, and
 `--test-compile-level`. Run `python3 build.py COMMAND --help` for details.
