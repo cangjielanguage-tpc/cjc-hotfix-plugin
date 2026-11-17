@@ -58,7 +58,7 @@ class Patcher {
                             for (operand in expr.operands) {
                                 if (let Some(gv) <- (operand as GlobalVar)) {
                                     if (!gv.isImported() && gv.packageName == pkg.name) {
-                                        gv.setLinkageType(LinkType.External)
+                                        setExternalLinkage(gv)
                                     }
                                 }
                             }
@@ -110,7 +110,7 @@ class Patcher {
 
     func patch(patchable: Patchable): Unit {
         // Differential patches resolve calls to the original native function.
-        patchable.fn.setLinkageType(LinkType.External)
+        setExternalLinkage(patchable.fn)
         // O2 must not embed a patchable implementation into unchanged callers.
         patchable.fn.setNoInline(true)
         if (guardVarsInitializer.isNone()) {
@@ -186,9 +186,8 @@ class Patcher {
         let cl = pkg.addClass(clName, clName, true)
         cl.superClass = pluginCtx.objectType
         cl.setOpen(true)
-        // CBC supplies implementations outside the native compilation.
-        // Public visibility prevents --no-sub-pkg from closing dispatch.
-        cl.setPublic()
+        // Implementations are supplied outside this compilation by CBC.
+        // Leave source visibility unset so O2 cannot close this subtype set.
         // C++ also marks this class COMPILER_ADD and external. Public stdx.chir
         // does not expose those setters.
 
@@ -325,7 +324,7 @@ class Patcher {
         let getterType = FuncType.get(Array<Type>(), BoolType.get())
         let getter = pkg.addFunction(getterType, getterName, getterName, pkg.name)
         getter.setInternal()
-        getter.setLinkageType(LinkType.External)
+        setExternalLinkage(getter)
         getter.setNoInline(true)
         getter.initBody()
         let getterEntry = getter.body.getOrThrow().entryBlock
@@ -338,7 +337,7 @@ class Patcher {
 
         let setterName = packagePatchableName.genPackageInitFlagAccessor(kind, false)
         let setter = createEmptyFunctionWithUnitRetVal(setterName, [BoolType.get()])
-        setter.setLinkageType(LinkType.External)
+        setExternalLinkage(setter)
         setter.setNoInline(true)
         let setterEntry = setter.body.getOrThrow().entryBlock
         let sb = CHIRBuilder(InsertPosition.AtEnd(setterEntry))
@@ -399,9 +398,8 @@ class Patcher {
         let cl = pkg.addClass(name, name, true)
         cl.superClass = pluginCtx.objectType
         cl.setAbstract(true)
-        // CBC supplies subclasses outside the native compilation.
-        // Public visibility prevents --no-sub-pkg from closing dispatch.
-        cl.setPublic()
+        // Subclasses are supplied outside this compilation by CBC.
+        // Leave source visibility unset even for --no-sub-pkg builds.
         // C++ marks the class COMPILER_ADD and external. Public stdx.chir does
         // not expose those setters.
         debug { =>
@@ -779,3 +777,20 @@ func findGlobalVar(pkg: Package, name: String): GlobalVar {
     }
     throw Exception("unable to find global var " + name)
 }
+
+// Older stdx.chir SDKs do not expose linkage mutation.
+@When[hotfix_sdk == "v13010"]
+func setExternalLinkage(value: Function): Unit {
+    value.setLinkageType(LinkType.External)
+}
+
+@When[hotfix_sdk == "v13010"]
+func setExternalLinkage(value: GlobalVar): Unit {
+    value.setLinkageType(LinkType.External)
+}
+
+@When[hotfix_sdk != "v13010"]
+func setExternalLinkage(value: Function): Unit {}
+
+@When[hotfix_sdk != "v13010"]
+func setExternalLinkage(value: GlobalVar): Unit {}

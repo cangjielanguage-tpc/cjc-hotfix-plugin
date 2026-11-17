@@ -14,6 +14,18 @@ PATCH_GEN_PROJECT_DIR = ROOT_DIR / "patch-gen"
 OUTPUT_DIR = ROOT_DIR / "output"
 PLUGIN_BUILD_DIR = OUTPUT_DIR / "cjc-plugin"
 PATCH_GEN_BUILD_DIR = OUTPUT_DIR / "patch-gen"
+SDK_VERSIONS_FILE = ROOT_DIR / "VERSION"
+
+
+def load_sdk_versions(path: Path) -> tuple[tuple[str, ...], str]:
+    versions = tuple(line.strip() for line in path.read_text().splitlines() if line.strip())
+    if (not versions or len(set(versions)) != len(versions)
+            or any(not version.isascii() or not version.isdecimal() for version in versions)):
+        raise ValueError(f"{path} must contain unique numeric SDK versions, one per line")
+    return versions, versions[-1]
+
+
+SDK_VERSIONS, DEFAULT_SDK_VERSION = load_sdk_versions(SDK_VERSIONS_FILE)
 
 
 def run_command(command: list[object], cwd: Path | None = None, env=None) -> None:
@@ -92,6 +104,7 @@ def build_plugin_artifact(args, env) -> None:
     command: list[object] = [
         "cjpm",
         "build",
+        "--sdk",
         "-j",
         "4",
         "--target-dir",
@@ -110,9 +123,9 @@ def build_plugin_artifact(args, env) -> None:
     print(f"Built: {destination}")
 
 
-def run_plugin_unit_tests(env) -> None:
+def run_plugin_unit_tests(args, env) -> None:
     result = run_command_result(
-        ["cjpm", "test", "-j", "4", "--no-color", "--target-dir", cjpm_target_dir()],
+        ["cjpm", "test", "--sdk", "-j", "4", "--no-color", "--target-dir", cjpm_target_dir()],
         cwd=PLUGIN_PROJECT_DIR,
         env=env,
     )
@@ -154,20 +167,33 @@ def cleanup_hotfix_lib(test_data_dir: Path) -> None:
             path.unlink()
 
 
-def plugin_excluded_tests(test_data_dir: Path, mode: str) -> set[str]:
-    if mode == "throw-stub":
+def read_exclusions(path: Path) -> set[str]:
+    if not path.is_file():
         return set()
-    exclude_file = test_data_dir / ("exclude_list.stub" if mode == "stub" else "exclude_list")
-    return {
-        test.strip()
-        for test in exclude_file.read_text().splitlines()
-        if test.strip()
-    }
+    return {name for line in path.read_text().splitlines()
+            if (name := line.split("#", 1)[0].strip())}
+
+
+def version_excluded_tests(test_root: Path, version: str, mode: str | None = None) -> set[str]:
+    directory = test_root / version
+    files = [directory / "exclude_list"]
+    if mode:
+        files.append(directory / f"exclude_list.{mode}")
+    excluded = set().union(*(read_exclusions(path) for path in files))
+    return excluded
+
+
+def plugin_excluded_tests(test_root: Path, mode: str, version: str) -> set[str]:
+    # Preserve the existing global lists' mode-specific meaning.
+    excluded = set()
+    if mode != "throw-stub":
+        excluded = read_exclusions(test_root / ("exclude_list.stub" if mode == "stub" else "exclude_list"))
+    return excluded | version_excluded_tests(test_root, version, mode)
 
 
 def run_plugin_functional_tests_at_level(args, compile_level: str, env) -> list[str]:
     failed_tests: list[str] = []
-    test_data_dir = PLUGIN_PROJECT_DIR / "test" / "functional"
+    test_data_dir = PLUGIN_PROJECT_DIR / "test" / "functional" / "tests_data"
     test_env = env.copy()
     throw_stub = args.run_tests == "throw-stub"
     expected_extension = "expected.stub" if args.run_tests == "stub" else "expected"
@@ -189,7 +215,7 @@ def run_plugin_functional_tests_at_level(args, compile_level: str, env) -> list[
             cleanup_hotfix_lib(test_data_dir)
             return sorted(missing)
 
-    excluded = plugin_excluded_tests(test_data_dir, args.run_tests)
+    excluded = plugin_excluded_tests(test_data_dir.parent, args.run_tests, args.version)
     test_files = [
         path
         for path in all_test_files
@@ -197,6 +223,10 @@ def run_plugin_functional_tests_at_level(args, compile_level: str, env) -> list[
            and path.name not in excluded
            and path.stem not in excluded
     ]
+
+    for path in all_test_files:
+        if test_matches_filter(path, filter_tests) and (path.name in excluded or path.stem in excluded):
+            print(f"Skipped {path.name} (SDK {args.version} exclusion)")
 
     for test_file in test_files:
         print(f"Test file: {test_file.name}")
@@ -268,6 +298,7 @@ def run_plugin_functional_tests_at_level(args, compile_level: str, env) -> list[
 
 def build_plugin(args) -> None:
     env = os.environ.copy()
+    env["HOTFIX_SDK_VERSION"] = args.version
     require_tool("cjc", env)
     require_tool("cjpm", env)
     env["HOTFIX_STUB_TEST"] = "true" if args.run_tests == "stub" else "false"
@@ -292,7 +323,7 @@ def build_plugin(args) -> None:
         return
 
     print("------------------------------------------------\nRunning unit tests...\n------------------------------------------------")
-    run_plugin_unit_tests(env)
+    run_plugin_unit_tests(args, env)
     failed_tests: list[str] = []
     for compile_level in args.test_compile_level:
         print(
@@ -337,7 +368,7 @@ def run_patch_gen_tests_at_level(
     args, compile_level: str, plugin_file: Path, env
 ) -> list[str]:
     failed_tests: list[str] = []
-    test_data_dir = PATCH_GEN_PROJECT_DIR / "test" / "test_data"
+    test_data_dir = PATCH_GEN_PROJECT_DIR / "test" / "functional" / "tests_data"
     filter_tests = parse_filter_tests(args.filter_tests)
     all_test_files = sorted(
         path for path in test_data_dir.glob("*.cj") if not path.stem.endswith("_patched")
@@ -356,8 +387,13 @@ def run_patch_gen_tests_at_level(
         env=env,
     )
 
+    excluded = (read_exclusions(test_data_dir.parent / "exclude_list")
+                | version_excluded_tests(test_data_dir.parent, args.version))
     for test_file in all_test_files:
         if not test_matches_filter(test_file, filter_tests):
+            continue
+        if test_file.name in excluded or test_file.stem in excluded:
+            print(f"Skipped {test_file.name} (SDK {args.version} exclusion)")
             continue
         test_name = test_file.stem
         print(f"Test file: {test_file.name}")
@@ -423,6 +459,12 @@ def run_patch_gen_tests_at_level(
             env=env,
             combine_output=True,
         )
+        if generator_result.returncode < 0:
+            print(f"Fail. patch-gen terminated by signal {-generator_result.returncode}")
+            if generator_result.stdout:
+                print(generator_result.stdout, end="")
+            failed_tests.append(test_file.name)
+            continue
         actual = generator_result.stdout
         actual_file = test_data_dir / f"{test_name}.actual"
         actual_file.write_text(actual)
@@ -459,7 +501,7 @@ def build_patch_gen(args) -> None:
     for tool in ("cmake", "cjc"):
         require_tool(tool, env)
 
-    plugin_file = Path(args.cjc_plugin_path).expanduser().resolve()
+    plugin_file = Path(args.cjc_plugin_path).expanduser().resolve() if args.cjc_plugin_path else plugin_path(env)
     if not plugin_file.is_file():
         print(f"CJC plugin library was not found: {plugin_file}")
         sys.exit(1)
@@ -469,6 +511,8 @@ def build_patch_gen(args) -> None:
     cmake_command: list[object] = [
         "cmake",
         PATCH_GEN_PROJECT_DIR,
+        f"-DCMAKE_CXX_COMPILER={env.get('CXX', 'clang++')}",
+        f"-DHOTFIX_SDK_VERSION={args.version}",
         f"-DCANGJIE_PATH={env['CANGJIE_HOME']}",
         f"-DCMAKE_BUILD_TYPE={args.build_type.capitalize()}",
         f"-DTEST={'ON' if tests_enabled else 'OFF'}",
@@ -512,6 +556,8 @@ def report_test_results(failed_tests: list[str]) -> None:
 
 
 def add_shared_build_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--version", choices=SDK_VERSIONS, default=DEFAULT_SDK_VERSION,
+                        help=f"SDK compatibility version (default: {DEFAULT_SDK_VERSION})")
     parser.add_argument(
         "-t",
         "--build-type",
@@ -528,7 +574,7 @@ def add_shared_build_options(parser: argparse.ArgumentParser) -> None:
         nargs="+",
         choices=["O0", "O1", "O2"],
         default=["O0", "O1"], # TODO enable O2 tests when plugin performance is improved
-        help="Compiler optimization levels for functional tests (default: O0 O1 O2)",
+        help="Compiler optimization levels for functional tests (default: O0 O1)",
     )
 
 
@@ -549,9 +595,8 @@ def main() -> None:
     patch_gen_parser.add_argument(
         "--plugin",
         dest="cjc_plugin_path",
-        required=True,
         metavar="PATH",
-        help="Path to the CJC plugin shared library (.so or .dylib)",
+        help="Path to the CJC plugin (default: selected version output)",
     )
     patch_gen_parser.add_argument(
         "--run-tests",
@@ -563,6 +608,11 @@ def main() -> None:
     args = parser.parse_args()
     if args.command != "clean" and args.filter_tests and not args.run_tests:
         parser.error("--filter-tests requires --run-tests")
+
+    if args.command != "clean":
+        global PLUGIN_BUILD_DIR, PATCH_GEN_BUILD_DIR
+        PLUGIN_BUILD_DIR = OUTPUT_DIR / args.version / "cjc-plugin"
+        PATCH_GEN_BUILD_DIR = OUTPUT_DIR / args.version / "patch-gen"
 
     if args.command == "clean":
         clean()

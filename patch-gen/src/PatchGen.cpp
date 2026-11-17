@@ -84,20 +84,12 @@ void PatchGen::mark()
             patchClassName = PatchableName(guardClass).genPatchClassName();
         }
 
+        const auto packageNameForTypes = patchedPackage->GetName();
         const auto patchedClasses = patchedPackage->GetCurPkgCustomTypeDef();
         std::unordered_set<CustomTypeDef*, CustomDefHasher, CustomDefEquality> patchedTypeDefsSet(
             patchedClasses.begin(), patchedClasses.end());
         for (const auto& sourceTypeDef : sourcePackage->GetCurPkgCustomTypeDef()) {
             const auto customKind = sourceTypeDef->GetCustomKind();
-
-            // TODO support enums and extends later
-            if (customKind != TYPE_CLASS && customKind != TYPE_STRUCT) {
-#if DEBUG
-                std::cout << "Only class or struct type def are supported now, but "
-                          << sourceTypeDef->GetIdentifierWithoutPrefix() << " is not one of them" << std::endl;
-#endif
-                continue;
-            }
 
             std::string typeKind;
             switch (customKind) {
@@ -120,11 +112,20 @@ void PatchGen::mark()
 #endif
 
             const auto patchedTypeDef = patchedTypeDefsSet.find(sourceTypeDef);
+            if (patchedTypeDef == patchedTypeDefsSet.end() &&
+                (customKind == TYPE_ENUM || customKind == TYPE_EXTEND) &&
+                sourceTypeDef->GetPackageName() != packageNameForTypes) {
+                // O2 can eliminate an unused specialization owned by another
+                // package. This does not delete a user-defined patch target.
+                continue;
+            }
             error(patchedTypeDef != patchedTypeDefsSet.end(),
                 typeKind + " " + sourceTypeDef->GetSrcCodeIdentifier() + " was not found in patched version");
 
             if (!patchClassName.has_value() || patchClassName.value() != sourceTypeDef->GetSrcCodeIdentifier()) {
-                markContext.markTypeAsImported(sourceTypeDef->GetIdentifierWithoutPrefix());
+                // Extension names can differ between compilation units; retain
+                // the identifier from the patched package for the import pass.
+                markContext.markTypeAsImported((*patchedTypeDef)->GetIdentifierWithoutPrefix());
             }
 
             for (const auto& sourceInstanceVar : sourceTypeDef->GetDirectInstanceVars()) {
@@ -1086,9 +1087,25 @@ void PatchGen::importTypes() const
     const auto typesToImport = markContext.getTypesToImport();
     std::vector<ClassDef*> newClassDefs;
     std::vector<StructDef*> newStructDefs;
+    std::vector<EnumDef*> newEnumDefs;
+    std::vector<ExtendDef*> newExtendDefs;
     for (const auto typeDef : patchedPackage->GetCurPkgCustomTypeDef()) {
         const auto kind = typeDef->GetCustomKind();
-        if (typesToImport.find(typeDef->GetIdentifierWithoutPrefix()) != typesToImport.end()) {
+        bool needsLocalExtension = false;
+        if (kind == TYPE_EXTEND) {
+            const auto extendedType = static_cast<ExtendDef*>(typeDef)->GetExtendedType();
+            if (extendedType->IsClass() || extendedType->IsStruct() || extendedType->IsEnum()) {
+                const auto extendedDef = static_cast<CustomType*>(extendedType)->GetCustomTypeDef();
+                const auto methods = extendedDef->GetMethods();
+                needsLocalExtension = std::any_of(methods.begin(), methods.end(), [](const Function* method) {
+                    return !method->TestAttr(Attribute::IMPORTED) && method->IsFuncWithBody();
+                });
+            }
+        }
+        // A retained member body makes its native owner a CBC definition. Keep
+        // interface extensions with that owner instead of dropping its tables.
+        if (typesToImport.find(typeDef->GetIdentifierWithoutPrefix()) != typesToImport.end() &&
+            !needsLocalExtension) {
             typeDef->EnableAttr(Attribute::IMPORTED);
             switch (kind) {
                 case TYPE_CLASS: {
@@ -1100,10 +1117,10 @@ void PatchGen::importTypes() const
                     patchedPackage->AddImportedStruct(static_cast<StructDef*>(typeDef));
                     break;
                 case TYPE_ENUM:
-                    // TODO support
+                    patchedPackage->AddImportedEnum(static_cast<EnumDef*>(typeDef));
                     break;
                 case TYPE_EXTEND:
-                    // TODO support
+                    patchedPackage->AddImportedExtend(static_cast<ExtendDef*>(typeDef));
                     break;
             }
 
@@ -1116,17 +1133,18 @@ void PatchGen::importTypes() const
                     newStructDefs.push_back(static_cast<StructDef*>(typeDef));
                     break;
                 case TYPE_ENUM:
-                    // TODO support
+                    newEnumDefs.push_back(static_cast<EnumDef*>(typeDef));
                     break;
                 case TYPE_EXTEND:
-                    // TODO support
+                    newExtendDefs.push_back(static_cast<ExtendDef*>(typeDef));
                     break;
             }
         }
     }
     patchedPackage->SetClasses(std::move(newClassDefs));
     patchedPackage->SetStructs(std::move(newStructDefs));
-    // TODO support enums, extends
+    patchedPackage->SetEnums(std::move(newEnumDefs));
+    patchedPackage->SetExtends(std::move(newExtendDefs));
 }
 
 Function* PatchGen::findGuardVarsInitializer(const Package* package)

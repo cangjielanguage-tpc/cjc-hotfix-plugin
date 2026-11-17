@@ -85,19 +85,65 @@ class PatcherStub {
             throw Exception("mapped stub has no body " + stubName)
         }
         if (!patchMethod.funcType.returnType.isUnitType()) {
-            // C++ PatcherStub replaces the body, fixes parameter references,
-            // removes the source stub function/method and resets the return
-            // value. The public stdx.chir API only exposes moveBodyTo(), which
-            // is safe for the Unit-returning mapped stubs currently reachable
-            // by the tests. Keep this failure explicit for non-Unit stubs.
-            throw Exception("mapped stub body transplant is not available through public stdx.chir API for " +
-                patchMethodName)
+            throw Exception("mapped stub requires a Unit-returning patch method: " + patchMethodName)
+        }
+        let sourceParams = stubFn.parameters
+        let targetParams = patchMethod.parameters
+        if (sourceParams.size != targetParams.size) {
+            throw Exception("mapped stub parameter count differs: " + patchMethodName)
+        }
+        for (i in 1..sourceParams.size) {
+            if (sourceParams[i].ty != targetParams[i].ty) {
+                throw Exception("mapped stub parameter type differs: " + patchMethodName)
+            }
         }
         debug { =>
             println("found:")
             println(stubFn.toString())
         }
-        stubFn.moveBodyTo(patchMethod)
+
+        // moveBodyTo aliases and then clears the source parameter list in the
+        // SDKs we support. Move expressions into a new body instead, preserving
+        // the patch method's receiver, parameters, and block ownership.
+        let sourceBody = stubFn.body.getOrThrow()
+        let sourceReturn = stubFn.returnValue
+        patchMethod.returnValue = None
+        patchMethod.body.getOrThrow().destroySelf()
+        patchMethod.initBody()
+        let targetBody = patchMethod.body.getOrThrow()
+        let blocks = HashMap<Block, Block>()
+        for (block in sourceBody.blocks) {
+            blocks[block] = if (block == sourceBody.entryBlock) {
+                targetBody.entryBlock
+            } else {
+                targetBody.appendBlock()
+            }
+        }
+        for (i in 0..sourceParams.size) {
+            sourceParams[i].replaceWith(targetParams[i])
+        }
+        for (block in sourceBody.blocks) {
+            let target = blocks[block]
+            let b = CHIRBuilder(InsertPosition.AtEnd(target))
+            let anchor = b.createConstant(UnitLiteral.get())
+            var previous: Expression = anchor
+            for (expr in block.exprs) {
+                expr.moveAfter(previous)
+                previous = expr
+            }
+            anchor.destroySelf()
+        }
+        for (block in sourceBody.blocks) {
+            block.replaceWith(blocks[block])
+        }
+        stubFn.returnValue = None
+        patchMethod.returnValue = sourceReturn
+        sourceBody.destroySelf()
+        // The source stub remains in the package; give it a valid empty body.
+        stubFn.initBody()
+        let empty = CHIRBuilder(InsertPosition.AtEnd(stubFn.body.getOrThrow().entryBlock))
+        stubFn.returnValue = empty.createAllocate(UnitType.get()).result
+        empty.createExit()
         debug { =>
             println("patch after replacement:")
             println(patchMethod.toString())
