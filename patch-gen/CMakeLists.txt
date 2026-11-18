@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 project(patch-gen)
 
 set(CMAKE_CXX_STANDARD 17)
-# Read the shared version list; its last entry is the default.
+# Read the independent hotfix API versions; the last entry is the default.
 set(SDK_VERSIONS_FILE "${CMAKE_CURRENT_SOURCE_DIR}/../VERSION")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${SDK_VERSIONS_FILE}")
 file(STRINGS "${SDK_VERSIONS_FILE}" SDK_VERSION_ROWS)
@@ -14,18 +14,18 @@ foreach(ROW IN LISTS SDK_VERSION_ROWS)
         continue()
     endif()
     if (NOT VERSION MATCHES "^[0-9]+$" OR VERSION IN_LIST SDK_VERSIONS)
-        message(FATAL_ERROR "Invalid or duplicate SDK version: ${VERSION}")
+        message(FATAL_ERROR "Invalid or duplicate hotfix API version: ${VERSION}")
     endif()
     list(APPEND SDK_VERSIONS "${VERSION}")
 endforeach()
 if (NOT SDK_VERSIONS)
-    message(FATAL_ERROR "No SDK versions in ${SDK_VERSIONS_FILE}")
+    message(FATAL_ERROR "No hotfix API versions in ${SDK_VERSIONS_FILE}")
 endif()
 list(GET SDK_VERSIONS -1 DEFAULT_SDK_VERSION)
-set(HOTFIX_SDK_VERSION "${DEFAULT_SDK_VERSION}" CACHE STRING "Cangjie SDK compatibility version")
-set_property(CACHE HOTFIX_SDK_VERSION PROPERTY STRINGS ${SDK_VERSIONS})
-if (NOT HOTFIX_SDK_VERSION IN_LIST SDK_VERSIONS)
-    message(FATAL_ERROR "Unsupported HOTFIX_SDK_VERSION: ${HOTFIX_SDK_VERSION}")
+set(HOTFIX_VERSION "${DEFAULT_SDK_VERSION}" CACHE STRING "Hotfix SDK API compatibility version")
+set_property(CACHE HOTFIX_VERSION PROPERTY STRINGS ${SDK_VERSIONS})
+if (NOT HOTFIX_VERSION IN_LIST SDK_VERSIONS)
+    message(FATAL_ERROR "Unsupported HOTFIX_VERSION: ${HOTFIX_VERSION}")
 endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -47,7 +47,7 @@ include_directories(
 file(GLOB_RECURSE EXE_SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 
 add_executable(patch-gen ${EXE_SOURCES})
-target_compile_definitions(patch-gen PRIVATE HOTFIX_SDK_VERSION=${HOTFIX_SDK_VERSION})
+target_compile_definitions(patch-gen PRIVATE HOTFIX_VERSION=${HOTFIX_VERSION})
 
 
 if (CANGJIE_PATH)

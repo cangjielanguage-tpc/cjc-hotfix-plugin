@@ -21,7 +21,7 @@ def load_sdk_versions(path: Path) -> tuple[tuple[str, ...], str]:
     versions = tuple(line.strip() for line in path.read_text().splitlines() if line.strip())
     if (not versions or len(set(versions)) != len(versions)
             or any(not version.isascii() or not version.isdecimal() for version in versions)):
-        raise ValueError(f"{path} must contain unique numeric SDK versions, one per line")
+        raise ValueError(f"{path} must contain unique numeric hotfix API versions, one per line")
     return versions, versions[-1]
 
 
@@ -298,7 +298,7 @@ def run_plugin_functional_tests_at_level(args, compile_level: str, env) -> list[
 
 def build_plugin(args) -> None:
     env = os.environ.copy()
-    env["HOTFIX_SDK_VERSION"] = args.version
+    env["HOTFIX_VERSION"] = args.version
     require_tool("cjc", env)
     require_tool("cjpm", env)
     env["HOTFIX_STUB_TEST"] = "true" if args.run_tests == "stub" else "false"
@@ -512,7 +512,7 @@ def build_patch_gen(args) -> None:
         "cmake",
         PATCH_GEN_PROJECT_DIR,
         f"-DCMAKE_CXX_COMPILER={env.get('CXX', 'clang++')}",
-        f"-DHOTFIX_SDK_VERSION={args.version}",
+        f"-DHOTFIX_VERSION={args.version}",
         f"-DCANGJIE_PATH={env['CANGJIE_HOME']}",
         f"-DCMAKE_BUILD_TYPE={args.build_type.capitalize()}",
         f"-DTEST={'ON' if tests_enabled else 'OFF'}",
@@ -557,7 +557,7 @@ def report_test_results(failed_tests: list[str]) -> None:
 
 def add_shared_build_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--version", choices=SDK_VERSIONS, default=DEFAULT_SDK_VERSION,
-                        help=f"SDK compatibility version (default: {DEFAULT_SDK_VERSION})")
+                        help=f"Hotfix SDK API version, independent of compiler/CHIR versions (default: {DEFAULT_SDK_VERSION})")
     parser.add_argument(
         "-t",
         "--build-type",

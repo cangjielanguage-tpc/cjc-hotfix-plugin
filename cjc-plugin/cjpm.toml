@@ -27,4 +27,4 @@
   "stdx.plugin.manager" = "${CANGJIE_STDX_PATH}/stdx.plugin.manager.cjo"
 
 [profile.customized-option]
-  sdk = '--cfg="hotfix_sdk=v${HOTFIX_SDK_VERSION}"'
+  sdk = '--cfg="version=${HOTFIX_VERSION}"'

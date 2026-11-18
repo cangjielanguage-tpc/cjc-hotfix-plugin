@@ -778,19 +778,18 @@ func findGlobalVar(pkg: Package, name: String): GlobalVar {
     throw Exception("unable to find global var " + name)
 }
 
-// Older stdx.chir SDKs do not expose linkage mutation.
-@When[hotfix_sdk == "v13010"]
+@When[version > "1"]
 func setExternalLinkage(value: Function): Unit {
     value.setLinkageType(LinkType.External)
 }
 
-@When[hotfix_sdk == "v13010"]
+@When[version > "1"]
 func setExternalLinkage(value: GlobalVar): Unit {
     value.setLinkageType(LinkType.External)
 }
 
-@When[hotfix_sdk != "v13010"]
+@When[version == "1"]
 func setExternalLinkage(value: Function): Unit {}
 
-@When[hotfix_sdk != "v13010"]
+@When[version == "1"]
 func setExternalLinkage(value: GlobalVar): Unit {}

@@ -12,20 +12,28 @@ its matching stdx library directory before building. Keep that directory in
 `LD_LIBRARY_PATH` when running patch-gen tests. The build script uses this
 environment; `--version` selects compatibility code, not an SDK installation.
 
-| SDK version |
-| --- |
-| `13008` |
-| `13010` (default) |
+Hotfix SDK API versions have their own numbering, independent of compiler
+releases and CHIR format versions:
+
+| Hotfix SDK API version | Supported stdx.chir API |
+| --- | --- |
+| `1` | Baseline API without linkage mutation |
+| `2` (default) | Version 1 plus `Function.setLinkageType` and `GlobalVar.setLinkageType` |
 
 Supported versions are listed in [`VERSION`](VERSION), one
 version number per line. Both `build.py` and CMake read this file; the last
-entry is the default. Add a version by appending its number.
+entry is the default. Add a version by appending the next number and documenting
+its added APIs in the table above. Each version includes the APIs of earlier
+versions.
 
-The runner passes the selected version through `HOTFIX_SDK_VERSION` and the
+The runner passes this independent API version through `HOTFIX_VERSION` and the
 generic CJPM `--sdk` option for builds and unit tests. For direct CJPM builds,
-set `HOTFIX_SDK_VERSION` and use `cjpm build --sdk`. The plugin uses compile-time
-`@When` conditions for version compatibility. Patch-gen receives the numeric
-C++ definition `HOTFIX_SDK_VERSION`. Use Clang for patch-gen (the build script
+set `HOTFIX_VERSION` and use `cjpm build --sdk`. The plugin uses compile-time
+`@When` conditions for version compatibility. These conditions take string
+values: `version == "1"` selects the baseline fallback, while
+`version > "1"` selects linkage mutation for version 2 and later. Ordered
+string comparisons would compare `"10"` before `"2"`. Patch-gen receives the numeric
+C++ definition `HOTFIX_VERSION`. Use Clang for patch-gen (the build script
 defaults to `clang++`; override with `CXX` if needed).
 
 ## Build and test
@@ -33,9 +41,9 @@ defaults to `clang++`; override with `CXX` if needed).
 Build the compiler plugin and optionally run its tests:
 
 ```bash
-python3 build.py build-plugin --version 13008 --build-type release --run-tests normal
-python3 build.py build-plugin --version 13008 --build-type release --run-tests stub
-python3 build.py build-plugin --version 13008 --build-type release --run-tests throw-stub
+python3 build.py build-plugin --version 1 --build-type release --run-tests normal
+python3 build.py build-plugin --version 1 --build-type release --run-tests stub
+python3 build.py build-plugin --version 1 --build-type release --run-tests throw-stub
 ```
 
 Set `HOTFIX_STUB_TEST=true` when invoking `cjc` to enable the
@@ -59,7 +67,7 @@ it to `true`; normal and stub plugin tests and patch-gen tests default it to
 Build the patch generator and run its tests (the plugin must be built first):
 
 ```bash
-python3 build.py build-patch-gen --version 13008 --build-type release --run-tests
+python3 build.py build-patch-gen --version 1 --build-type release --run-tests
 ```
 
 By default patch-gen tests use the plugin from the selected version's output
@@ -74,7 +82,7 @@ test/
     exclude_list         # optional shared exclusions
     exclude_list.stub    # optional shared plugin stub-mode exclusions
     <version>/
-      exclude_list       # optional exclusions for the selected SDK version
+      exclude_list       # optional exclusions for the selected hotfix SDK API version
 ```
 
 Plugin tests also load `exclude_list.normal`, `exclude_list.stub`, or
