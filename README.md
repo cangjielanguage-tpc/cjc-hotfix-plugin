@@ -75,7 +75,7 @@ directory. Use `--plugin <path>` to override it; it must match the active SDK.
 
 Both tools use the same functional test layout:
 
-```text
+```
 test/
   functional/
     tests_data/          # sources, expected outputs, maps, and test libraries
@@ -94,7 +94,7 @@ Patch-gen loads both its shared and selected version's `exclude_list`.
 Entries are test names with or without `.cj`; blank lines and `#` comments are
 ignored. Add a reason with each exclusion, for example:
 
-```text
+```
 example_test # Explain the SDK limitation that prevents this test from passing.
 ```
 
