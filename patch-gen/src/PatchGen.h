@@ -324,7 +324,8 @@ public:
                   : std::nullopt,
               func->GetSrcCodeIdentifier(), std::move(func->GetFuncType()->GetParamTypes()))
     {
-        if (func->GetGenericDecl() != nullptr) {
+        // Serialized specializations can lose the declaration link when the template is imported.
+        if (func->GetGenericDecl() != nullptr || func->TestAttr(Attribute::GENERIC_INSTANTIATED)) {
             instantiationSuffix = "$I$" + func->GetIdentifierWithoutPrefix();
         }
     }
