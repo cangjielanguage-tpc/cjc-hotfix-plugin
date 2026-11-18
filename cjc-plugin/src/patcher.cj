@@ -162,7 +162,6 @@ class Patcher {
             let retVal = b.createAllocate(retType)
             patchMethod.returnValue = retVal.result
 
-            // TODO (as in the C++): figure out why an Exit here fails at runtime.
             genShouldNotReachHere(body)
 
             patch.appendMethod(patchMethod)
@@ -459,6 +458,73 @@ class Patcher {
         return gvi
     }
 
+    // Guard methods are owned by a nongeneric class. Pass the original enclosing
+    // context explicitly, before the function's own type arguments.
+    func collectTypeParamsForPatchable(patchable: Function): Array<GenericType> {
+        let params = ArrayList<GenericType>()
+        if (let Some(parent) <- patchable.declaredParent) {
+            for (ty in parent.genericTypeParams) {
+                params.add(ty)
+            }
+        }
+        for (ty in patchable.genericTypeParams) {
+            params.add(ty)
+        }
+        return params.toArray()
+    }
+
+    func replacePatchType(ty: Type, replacements: HashMap<GenericType, Type>): Type {
+        if (let Some(generic) <- (ty as GenericType)) {
+            return replacements.get(generic) ?? ty
+        }
+        let args = ty.typeArgs
+        let replaced = Array<Type>(args.size, {i => replacePatchType(args[i], replacements)})
+        var changed = false
+        for (i in 0..args.size) {
+            changed = changed || args[i] != replaced[i]
+        }
+        if (!changed) {
+            return ty
+        }
+        match (ty) {
+            case t: ClassLikeType => return ClassLikeType.get(t.classLikeDef, replaced)
+            case t: StructType => return StructType.get(t.structDef, replaced)
+            case t: EnumType => return EnumType.get(t.enumDef, replaced)
+            case t: FuncType =>
+                return FuncType.get(Array<Type>(t.paramTypes.size, {i => replaced[i]}),
+                    replaced[replaced.size - 1], varArg: t.hasVarArg, cFunc: t.isCFunc)
+            case _: TupleType => return TupleType.get(replaced)
+            case _: RefType => return RefType.get(replaced[0])
+            case _: BoxType => return BoxType.get(replaced[0])
+            case _: CPointerType => return CPointerType.get(replaced[0])
+            case t: RawArrayType => return RawArrayType.get(replaced[0], t.dims)
+            case t: VArrayType => return VArrayType.get(replaced[0], t.size)
+            case _ => throw Exception("Unsupported generic patch type: " + ty.toString())
+        }
+    }
+
+    func createGuardGenericContext(patchable: Function, name: String): (Array<GenericType>, HashMap<GenericType, Type>) {
+        let original = collectTypeParamsForPatchable(patchable)
+        let replacements = HashMap<GenericType, Type>()
+        if (original.size == patchable.genericTypeParams.size) {
+            return (original, replacements)
+        }
+        // Fresh identities avoid treating the original class variable as both a
+        // class variable and a function variable in CBC's type-variable cache.
+        let lifted = Array<GenericType>(original.size,
+            {i => GenericType.get(name + "$T" + i.toString(), original[i].srcCodeName)})
+        for (i in 0..original.size) {
+            replacements.add(original[i], lifted[i])
+        }
+        // Populate constraints after the entire mapping exists: bounds can refer
+        // to another enclosing or method parameter.
+        for (i in 0..original.size) {
+            let bounds = original[i].upperBounds
+            lifted[i].upperBounds = Array<Type>(bounds.size, {j => replacePatchType(bounds[j], replacements)})
+        }
+        return (lifted, replacements)
+    }
+
     /*
      * abstract func $..Patch: ($Patch&, <orig params>) -> <ret>
      */
@@ -468,7 +534,8 @@ class Patcher {
             println(patchable.toString())
         }
         let gc = guardClass.getOrThrow()
-        let patchableMethodType = patchable.funcType
+        let (genericParams, replacements) = createGuardGenericContext(patchable, name)
+        let patchableMethodType = (replacePatchType(patchable.funcType, replacements) as FuncType).getOrThrow()
 
         let origParamTypes = patchableMethodType.paramTypes
         let methodParamTypes = ArrayList<Type>()
@@ -483,7 +550,7 @@ class Patcher {
 
         let methodType = FuncType.get(methodParamTypes.toArray(), patchableMethodType.returnType)
         let method = pkg.addFunction(methodType, name, name, pkg.name)
-        method.genericTypeParams = patchable.genericTypeParams
+        method.genericTypeParams = genericParams
         method.setAbstract(true)
         // Keep unused abstract guards in the method list during O2 DCE.
         method.setOpen(true)
@@ -659,17 +726,16 @@ class Patcher {
         // C++ marks caller->GetResult() READONLY. The public stdx.chir API has
         // setReadOnly on GlobalValue, not on this LocalVar result.
 
-        let funcType = guardMethod.funcType
         let args = if (patchable.isClassConstructor() || patchable.isStructConstructor()) {
             let params = modifiedPatchable.parameters
             Array<Value>(params.size - 1, {i => params[i]})
         } else {
             toValues(patchable.parameters)
         }
-        let typeArgs = patchable.genericTypeParams
+        let typeArgs = collectTypeParamsForPatchable(patchable)
         let funcCallCtx = FuncCallContext(args, Array<Type>(typeArgs.size, {i => typeArgs[i]}), classRefType)
         let callContext = InvokeCallContext(caller.result, funcCallCtx, guardMethod)
-        let callMethod = pb.createInvoke(funcType.returnType, callContext)
+        let callMethod = pb.createInvoke(patchable.funcType.returnType, callContext)
 
         let resultType = callMethod.result.ty
         if (resultType.isUnitType()) {
