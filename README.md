@@ -7,16 +7,43 @@ This repository contains two related tools:
 
 ## Environment
 
-Set the toolchain and `stdx` paths before building.
+Source the selected SDK's `envsetup.sh` and set `CANGJIE_STDX_PATH` to
+its matching stdx library directory before building. Keep that directory in
+`LD_LIBRARY_PATH` when running patch-gen tests. The build script uses this
+environment; `--version` selects compatibility code, not an SDK installation.
+
+Hotfix SDK API versions have their own numbering, independent of compiler
+releases and CHIR format versions:
+
+| Hotfix SDK API version | Supported stdx.chir API |
+| --- | --- |
+| `1` | Baseline API without linkage mutation |
+| `2` (default) | Version 1 plus `Function.setLinkageType` and `GlobalVar.setLinkageType` |
+
+Supported versions are listed in [`VERSION`](VERSION), one
+version number per line. Both `build.py` and CMake read this file; the last
+entry is the default. Add a version by appending the next number and documenting
+its added APIs in the table above. Each version includes the APIs of earlier
+versions.
+
+The runner passes this independent API version through `HOTFIX_VERSION` and the
+generic CJPM `--sdk` option for builds and unit tests. For direct CJPM builds,
+set `HOTFIX_VERSION` and use `cjpm build --sdk`. The plugin uses compile-time
+`@When` conditions for version compatibility. These conditions take string
+values: `version == "1"` selects the baseline fallback, while
+`version > "1"` selects linkage mutation for version 2 and later. Ordered
+string comparisons would compare `"10"` before `"2"`. Patch-gen receives the numeric
+C++ definition `HOTFIX_VERSION`. Use Clang for patch-gen (the build script
+defaults to `clang++`; override with `CXX` if needed).
 
 ## Build and test
 
 Build the compiler plugin and optionally run its tests:
 
 ```bash
-python3 build.py build-plugin --run-tests normal
-python3 build.py build-plugin --run-tests stub
-python3 build.py build-plugin --run-tests throw-stub
+python3 build.py build-plugin --version 1 --build-type release --run-tests normal
+python3 build.py build-plugin --version 1 --build-type release --run-tests stub
+python3 build.py build-plugin --version 1 --build-type release --run-tests throw-stub
 ```
 
 Set `HOTFIX_STUB_TEST=true` when invoking `cjc` to enable the
@@ -40,17 +67,50 @@ it to `true`; normal and stub plugin tests and patch-gen tests default it to
 Build the patch generator and run its tests (the plugin must be built first):
 
 ```bash
-python3 build.py build-patch-gen --plugin <plugin_path> --build-type release --run-tests
+python3 build.py build-patch-gen --version 1 --build-type release --run-tests
 ```
+
+By default patch-gen tests use the plugin from the selected version's output
+directory. Use `--plugin <path>` to override it; it must match the active SDK.
+
+Both tools use the same functional test layout:
+
+```
+test/
+  functional/
+    tests_data/          # sources, expected outputs, maps, and test libraries
+    exclude_list         # optional shared exclusions
+    exclude_list.stub    # optional shared plugin stub-mode exclusions
+    <version>/
+      exclude_list       # optional exclusions for the selected hotfix SDK API version
+```
+
+Plugin tests also load `exclude_list.normal`, `exclude_list.stub`, or
+`exclude_list.throw-stub` under the selected version directory. A version's
+`exclude_list` applies to all its modes. The shared plugin `exclude_list`
+applies to normal mode, and the shared `exclude_list.stub` applies to stub mode.
+Patch-gen loads both its shared and selected version's `exclude_list`.
+
+Entries are test names with or without `.cj`; blank lines and `#` comments are
+ignored. Add a reason with each exclusion, for example:
+
+```
+example_test # Explain the SDK limitation that prevents this test from passing.
+```
+
+Skips are printed. Missing lists or version directories exclude nothing; create
+lists only when there are tests to skip. Default functional test levels are O0,
+O1, and O2; select a subset with `--test-compile-level`. Tests write temporary
+files into `tests_data/`, so run SDK/mode test commands sequentially.
 
 Useful shared options are `--build-type`, `--filter-tests`, and
 `--test-compile-level`. Run `python3 build.py COMMAND --help` for details.
 
-Build artifacts are written to `output/cjc-plugin` and `output/patch-gen`.
+Build artifacts are written to `output/<version>/cjc-plugin` and `output/<version>/patch-gen`.
 Remove all artifacts with:
 
 ```bash
 python3 build.py clean
 ```
 
-The resulting binaries are `output/cjc-plugin/libhotfix-plugin.so` and `output/patch-gen/patch-gen` on Linux (`libhotfix-plugin.dylib` on macOS).
+The resulting binaries are `output/<version>/cjc-plugin/libhotfix-plugin.so` and `output/<version>/patch-gen/patch-gen` on Linux (`libhotfix-plugin.dylib` on macOS).

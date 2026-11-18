@@ -84,20 +84,12 @@ void PatchGen::mark()
             patchClassName = PatchableName(guardClass).genPatchClassName();
         }
 
+        const auto packageNameForTypes = patchedPackage->GetName();
         const auto patchedClasses = patchedPackage->GetCurPkgCustomTypeDef();
         std::unordered_set<CustomTypeDef*, CustomDefHasher, CustomDefEquality> patchedTypeDefsSet(
             patchedClasses.begin(), patchedClasses.end());
         for (const auto& sourceTypeDef : sourcePackage->GetCurPkgCustomTypeDef()) {
             const auto customKind = sourceTypeDef->GetCustomKind();
-
-            // TODO support enums and extends later
-            if (customKind != TYPE_CLASS && customKind != TYPE_STRUCT) {
-#if DEBUG
-                std::cout << "Only class or struct type def are supported now, but "
-                          << sourceTypeDef->GetIdentifierWithoutPrefix() << " is not one of them" << std::endl;
-#endif
-                continue;
-            }
 
             std::string typeKind;
             switch (customKind) {
@@ -120,11 +112,20 @@ void PatchGen::mark()
 #endif
 
             const auto patchedTypeDef = patchedTypeDefsSet.find(sourceTypeDef);
+            if (patchedTypeDef == patchedTypeDefsSet.end() &&
+                (customKind == TYPE_ENUM || customKind == TYPE_EXTEND) &&
+                sourceTypeDef->GetPackageName() != packageNameForTypes) {
+                // O2 can eliminate an unused specialization owned by another
+                // package. This does not delete a user-defined patch target.
+                continue;
+            }
             error(patchedTypeDef != patchedTypeDefsSet.end(),
                 typeKind + " " + sourceTypeDef->GetSrcCodeIdentifier() + " was not found in patched version");
 
             if (!patchClassName.has_value() || patchClassName.value() != sourceTypeDef->GetSrcCodeIdentifier()) {
-                markContext.markTypeAsImported(sourceTypeDef->GetIdentifierWithoutPrefix());
+                // Extension names can differ between compilation units; retain
+                // the identifier from the patched package for the import pass.
+                markContext.markTypeAsImported((*patchedTypeDef)->GetIdentifierWithoutPrefix());
             }
 
             for (const auto& sourceInstanceVar : sourceTypeDef->GetDirectInstanceVars()) {
@@ -173,6 +174,12 @@ void PatchGen::mark()
 
             // TODO support lambdas and generics
             const auto patchedGlobalFunc = patchedGlobalFuncsSet.find(sourceFunc);
+            if (patchedGlobalFunc == patchedGlobalFuncsSet.end() &&
+                (sourceFunc->TestAttr(Attribute::IMPORTED) || sourceFunc->GetPackageName() != packageName)) {
+                // Optimization may remove an unused import. Its definition is
+                // owned by another package, so it is not a deleted patch target.
+                continue;
+            }
             error(patchedGlobalFunc != patchedGlobalFuncsSet.end(),
                 "func " + sourceFunc->GetIdentifierWithoutPrefix() + " was not found in patched version");
             markFunc(sourceFunc, *patchedGlobalFunc);
@@ -447,7 +454,8 @@ void PatchGen::removeRedundantFunctions() const
 }
 
 /*
-  Replace access to package inits flags to corresponding accessors' call.
+  Replace direct accesses from older plugin outputs with accessor calls.
+  Current plugin outputs already use these calls before compiler optimization.
 */
 void PatchGen::updatePackageInits() const
 {
@@ -615,8 +623,8 @@ void PatchGen::removeGuardChecks(const Function* patchable) const
 /**
  * - Removes guard checks for the function
  * - Remove corresponding guard var
- * - Remove corresponding methods in guard/patch classes
- * - Mark corresponding global functions as unreachable
+ * - Preserve guard methods that occupy native vtable slots
+ * - Remove guard methods without native slots and mark them unreachable
  * // TODO remove @patchable AnnoInfo, if possible
  */
 void PatchGen::makeNewPatchableFuncsAsNonPatchable()
@@ -631,6 +639,19 @@ void PatchGen::makeNewPatchableFuncsAsNonPatchable()
 
     patchClass = findPatchClass(patchedPackage, guardClass);
     error(patchClass, "patch class is expected to be initialized");
+
+    std::unordered_set<std::string> nativeGuardMethods;
+    if (sourcePackage) {
+        if (const auto sourceGuardClass = findGuardClass(sourcePackage)) {
+            // O2 can detach abstract declarations from the method list. The
+            // native vtable still records their slots and is the ABI contract.
+            for (const auto& table : sourceGuardClass->GetDefVTable().GetTypeVTables()) {
+                for (const auto& method : table.GetVirtualMethods()) {
+                    nativeGuardMethods.insert(method.GetVirtualMethod()->GetSrcCodeIdentifier());
+                }
+            }
+        }
+    }
 #if DEBUG
     std::cout << "patch class:" << std::endl;
     std::cout << patchClass->ToString() << std::endl;
@@ -650,6 +671,11 @@ void PatchGen::makeNewPatchableFuncsAsNonPatchable()
         patchedPackage->SetAllGlobalVars(std::move(newGlobalVars));
 
         const auto guardMethodName = patchableName.genGuardMethodName(PatchableName::GuardMethodKind::PLAIN);
+        if (nativeGuardMethods.count(guardMethodName) != 0) {
+            // Keep the declaration and throwing implementation so CBC cannot
+            // compact this slot and invalidate native callers' method offsets.
+            continue;
+        }
 
         std::vector<Function*> newGuardClassMethod;
         for (const auto method : guardClass->GetMethods()) {
@@ -672,11 +698,9 @@ void PatchGen::makeNewPatchableFuncsAsNonPatchable()
             synthCtorName = patchableName.genSyntheticCtorName();
         }
 
-        // Here we can't remove redundant global functions, as their references exist in vtable.
-        // We don't want to use vtable CHIR C++ API as there is no stdx libchir analogue.
-        // So marking these functions as unreachable lets cbc-compiler to recognize and remove them.
+        // These guards have no slot in the native executable, so CBC may omit
+        // them without changing the layout expected by existing native calls.
         Function* synthCtor = nullptr;
-        std::vector<Function*> globalFuncs;
         for (const auto globalFunc : patchedPackage->GetGlobalFunctions()) {
             if (globalFunc->GetSrcCodeIdentifier() == guardMethodName ||
                 (synthCtorName && globalFunc->GetSrcCodeIdentifier() == *synthCtorName)) {
@@ -1063,9 +1087,25 @@ void PatchGen::importTypes() const
     const auto typesToImport = markContext.getTypesToImport();
     std::vector<ClassDef*> newClassDefs;
     std::vector<StructDef*> newStructDefs;
+    std::vector<EnumDef*> newEnumDefs;
+    std::vector<ExtendDef*> newExtendDefs;
     for (const auto typeDef : patchedPackage->GetCurPkgCustomTypeDef()) {
         const auto kind = typeDef->GetCustomKind();
-        if (typesToImport.find(typeDef->GetIdentifierWithoutPrefix()) != typesToImport.end()) {
+        bool needsLocalExtension = false;
+        if (kind == TYPE_EXTEND) {
+            const auto extendedType = static_cast<ExtendDef*>(typeDef)->GetExtendedType();
+            if (extendedType->IsClass() || extendedType->IsStruct() || extendedType->IsEnum()) {
+                const auto extendedDef = static_cast<CustomType*>(extendedType)->GetCustomTypeDef();
+                const auto methods = extendedDef->GetMethods();
+                needsLocalExtension = std::any_of(methods.begin(), methods.end(), [](const Function* method) {
+                    return !method->TestAttr(Attribute::IMPORTED) && method->IsFuncWithBody();
+                });
+            }
+        }
+        // A retained member body makes its native owner a CBC definition. Keep
+        // interface extensions with that owner instead of dropping its tables.
+        if (typesToImport.find(typeDef->GetIdentifierWithoutPrefix()) != typesToImport.end() &&
+            !needsLocalExtension) {
             typeDef->EnableAttr(Attribute::IMPORTED);
             switch (kind) {
                 case TYPE_CLASS: {
@@ -1077,10 +1117,10 @@ void PatchGen::importTypes() const
                     patchedPackage->AddImportedStruct(static_cast<StructDef*>(typeDef));
                     break;
                 case TYPE_ENUM:
-                    // TODO support
+                    patchedPackage->AddImportedEnum(static_cast<EnumDef*>(typeDef));
                     break;
                 case TYPE_EXTEND:
-                    // TODO support
+                    patchedPackage->AddImportedExtend(static_cast<ExtendDef*>(typeDef));
                     break;
             }
 
@@ -1093,17 +1133,18 @@ void PatchGen::importTypes() const
                     newStructDefs.push_back(static_cast<StructDef*>(typeDef));
                     break;
                 case TYPE_ENUM:
-                    // TODO support
+                    newEnumDefs.push_back(static_cast<EnumDef*>(typeDef));
                     break;
                 case TYPE_EXTEND:
-                    // TODO support
+                    newExtendDefs.push_back(static_cast<ExtendDef*>(typeDef));
                     break;
             }
         }
     }
     patchedPackage->SetClasses(std::move(newClassDefs));
     patchedPackage->SetStructs(std::move(newStructDefs));
-    // TODO support enums, extends
+    patchedPackage->SetEnums(std::move(newEnumDefs));
+    patchedPackage->SetExtends(std::move(newExtendDefs));
 }
 
 Function* PatchGen::findGuardVarsInitializer(const Package* package)

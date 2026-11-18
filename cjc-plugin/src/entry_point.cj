@@ -64,6 +64,8 @@ public class EntryPoint <: CHIRPluginBase {
             }
         }
 
+        patcher.rewritePackageInitFlagAccesses()
+
         debug { =>
             dumpSerializedPackage(pkg)
             println("Finished running Hotfix plugin")
@@ -90,9 +92,10 @@ private func dumpSerializedPackage(pkg: Package): Unit {
             offset += currentSize
         }
     }
-    unsafe {
-        freeSerializedMemory()
-    }
+    // serializePackage owns the shared buffer and resets it on the next call
+    // (including the plugin manager's final serialization). Do not call the
+    // C ABI entry point freeSerializedMemory from managed code: its N2C stub
+    // can invalidate GC stack walking when a collection overlaps the reset.
 }
 
 /**
