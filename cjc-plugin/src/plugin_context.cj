@@ -1,5 +1,3 @@
-// TODO move to the separate module to be used both from plugin and patch-gen
-
 /*
  * Cangjie port of the name-mangling and data structures from
  * src/PluginContext.h (the `PatchableName` and `Patchable` types).
