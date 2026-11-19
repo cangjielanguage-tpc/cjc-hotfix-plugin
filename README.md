@@ -1,15 +1,16 @@
 # Cangjie hotfix tools
 
-This repository contains two related tools:
-
-- `cjc-plugin` — a Cangjie compiler plugin that prepares CHIR for hot fixes.
-- `patch-gen` — a utility that generates a hotfix patch.
+This repository contains `cjc-plugin`, a Cangjie compiler plugin that prepares
+CHIR for hot fixes. The patch generator and its functional tests are maintained
+in the CBC compiler repository (`core/cbc-patchgen` and `test/patch-gen`).
+Build patch-gen there with `sbt patchGen/nativeImage` (GraalVM) or
+`sbt patchGen/assembly` (JVM).
 
 ## Environment
 
 Source the selected SDK's `envsetup.sh` and set `CANGJIE_STDX_PATH` to
 its matching stdx library directory before building. Keep that directory in
-`LD_LIBRARY_PATH` when running patch-gen tests. The build script uses this
+`LD_LIBRARY_PATH` when running plugin tests. The build script uses this
 environment; `--version` selects compatibility code, not an SDK installation.
 
 Hotfix SDK API versions have their own numbering, independent of compiler
@@ -21,7 +22,7 @@ releases and CHIR format versions:
 | `2` (default) | Version 1 plus `Function.setLinkageType` and `GlobalVar.setLinkageType` |
 
 Supported versions are listed in [`VERSION`](VERSION), one
-version number per line. Both `build.py` and CMake read this file; the last
+version number per line. `build.py` reads this file; the last
 entry is the default. Add a version by appending the next number and documenting
 its added APIs in the table above. Each version includes the APIs of earlier
 versions.
@@ -32,9 +33,7 @@ set `HOTFIX_VERSION` and use `cjpm build --sdk`. The plugin uses compile-time
 `@When` conditions for version compatibility. These conditions take string
 values: `version == "1"` selects the baseline fallback, while
 `version > "1"` selects linkage mutation for version 2 and later. Ordered
-string comparisons would compare `"10"` before `"2"`. Patch-gen receives the numeric
-C++ definition `HOTFIX_VERSION`. Use Clang for patch-gen (the build script
-defaults to `clang++`; override with `CXX` if needed).
+string comparisons would compare `"10"` before `"2"`.
 
 ## Build and test
 
@@ -61,19 +60,10 @@ requires no plugin rebuild.
 `app-patchable` filter is present. Set `HOTFIX_PATCH_ALL=false` when invoking `cjc`
 to select only annotated functions and functions matching the filter.
 This runtime option requires no plugin rebuild. Throw-stub plugin tests default
-it to `true`; normal and stub plugin tests and patch-gen tests default it to
+it to `true`; normal and stub plugin tests default it to
 `false` to test annotation-based selection.
 
-Build the patch generator and run its tests (the plugin must be built first):
-
-```bash
-python3 build.py build-patch-gen --version 1 --build-type release --run-tests
-```
-
-By default patch-gen tests use the plugin from the selected version's output
-directory. Use `--plugin <path>` to override it; it must match the active SDK.
-
-Both tools use the same functional test layout:
+Plugin tests use the following layout:
 
 ```
 test/
@@ -89,7 +79,6 @@ Plugin tests also load `exclude_list.normal`, `exclude_list.stub`, or
 `exclude_list.throw-stub` under the selected version directory. A version's
 `exclude_list` applies to all its modes. The shared plugin `exclude_list`
 applies to normal mode, and the shared `exclude_list.stub` applies to stub mode.
-Patch-gen loads both its shared and selected version's `exclude_list`.
 
 Entries are test names with or without `.cj`; blank lines and `#` comments are
 ignored. Add a reason with each exclusion, for example:
@@ -103,14 +92,15 @@ lists only when there are tests to skip. Default functional test levels are O0,
 O1, and O2; select a subset with `--test-compile-level`. Tests write temporary
 files into `tests_data/`, so run SDK/mode test commands sequentially.
 
-Useful shared options are `--build-type`, `--filter-tests`, and
+Useful options are `--build-type`, `--filter-tests`, and
 `--test-compile-level`. Run `python3 build.py COMMAND --help` for details.
 
-Build artifacts are written to `output/<version>/cjc-plugin` and `output/<version>/patch-gen`.
+Build artifacts are written to `output/<version>/cjc-plugin`.
 Remove all artifacts with:
 
 ```bash
 python3 build.py clean
 ```
 
-The resulting binaries are `output/<version>/cjc-plugin/libhotfix-plugin.so` and `output/<version>/patch-gen/patch-gen` on Linux (`libhotfix-plugin.dylib` on macOS).
+The resulting library is `output/<version>/cjc-plugin/libhotfix-plugin.so` on
+Linux (`libhotfix-plugin.dylib` on macOS).

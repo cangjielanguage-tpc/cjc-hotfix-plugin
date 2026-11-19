@@ -1,4 +1,0 @@
-class Foo {
-  let g1 = 6
-  static var g2 = 7
-}
