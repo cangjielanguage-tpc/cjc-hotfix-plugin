@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "cangjie/CHIR/IR/CHIRBuilder.h"
+#include "cangjie/CHIR/Utils/Utils.h"
 
 #include <iostream>
 #include <regex>
@@ -263,6 +264,12 @@ static std::string ToCjQualifiedName(const Type& type)
         case Type::TYPE_STRUCT:
         case Type::TYPE_ENUM:
         case Type::TYPE_CLASS: {
+            if (type.IsAutoEnvBase()) {
+                // Guard names are created before closure conversion replaces function types.
+                const auto& classType = static_cast<const ClassType&>(type);
+                auto [paramTypes, returnType] = GetFuncTypeWithoutThisPtrFromAutoEnvBaseType(classType);
+                return "(" + JoinCjQualifiedNames(paramTypes, ",") + ")->" + ToCjQualifiedName(*returnType);
+            }
             const auto& customType = static_cast<const CustomType&>(type);
             const auto def = customType.GetCustomTypeDef();
             const auto defName = def->GetSrcCodeIdentifier();
@@ -317,7 +324,8 @@ public:
                   : std::nullopt,
               func->GetSrcCodeIdentifier(), std::move(func->GetFuncType()->GetParamTypes()))
     {
-        if (func->GetGenericDecl() != nullptr) {
+        // Serialized specializations can lose the declaration link when the template is imported.
+        if (func->GetGenericDecl() != nullptr || func->TestAttr(Attribute::GENERIC_INSTANTIATED)) {
             instantiationSuffix = "$I$" + func->GetIdentifierWithoutPrefix();
         }
     }
