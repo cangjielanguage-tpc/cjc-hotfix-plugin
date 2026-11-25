@@ -23,6 +23,11 @@ file(GLOB_RECURSE LIB_SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 
 add_library(hotfix-plugin SHARED ${LIB_SOURCES})
 
+option(IOS_TARGET "Build the hotfix plugin for iOS app targets" OFF)
+if (IOS_TARGET)
+    target_compile_definitions(hotfix-plugin PRIVATE IOS_TARGET)
+endif ()
+
 if (CANGJIE_PATH)
     target_link_directories(hotfix-plugin PRIVATE "${CANGJIE_PATH}/tools/lib")
     target_link_libraries(hotfix-plugin PRIVATE "cangjie-lsp" ${CMAKE_DL_LIBS} pthread)

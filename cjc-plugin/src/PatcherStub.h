@@ -109,7 +109,10 @@ public:
         CJC_ASSERT_WITH_MSG(packageInitGuardVarFlag, "unable to find package init guard var flag definition");
 
         const auto packageInitBody = package.GetPackageInitFunc()->GetBody();
-        const auto entryBlock = packageInitBody->GetEntryBlock();
+        auto* entryBlock = packageInitBody->GetEntryBlock();
+#ifdef IOS_TARGET
+        entryBlock = static_cast<Branch*>(entryBlock->GetTerminator())->GetTrueBlock();
+#endif
         const auto firstExpr = entryBlock->GetExpressionByIdx(0);
 
         const auto trueExpr = builder.CreateConstantExpression<BoolLiteral>(builder.GetBoolTy(), entryBlock, true);

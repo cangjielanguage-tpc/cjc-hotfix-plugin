@@ -19,6 +19,12 @@ python3 build.py build-plugin --run-tests normal
 python3 build.py build-plugin --run-tests stub
 ```
 
+For an iOS app that uses the CBC bootstrap, build the plugin with
+`python3 build.py build-plugin --target-ios` (`-DIOS_TARGET=ON`
+when configuring CMake directly). This plugin emits the foreign declaration
+and readiness guards in CHIR. Use it for apps that link `libcbcengine.dylib`
+and run deferred initializers through the CBC bootstrap.
+
 Test modes are selected at build time on this branch. Rebuild the plugin
 without `--run-tests` before installing it.
 

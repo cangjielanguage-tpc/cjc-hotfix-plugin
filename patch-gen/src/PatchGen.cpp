@@ -511,7 +511,24 @@ void PatchGen::removeGuardChecks(const Function* patchable) const
     std::cout << patchable->ToString(0) << std::endl;
 #endif
 
-    const auto patchableBody = patchable->GetEntryBlock();
+    auto* patchableBody = patchable->GetEntryBlock();
+    if (isPackageInit(patchable, patchedPackage)) {
+        // The AOT wrapper only dispatches to a CBC initializer once the bridge is ready.
+        for (auto* expression : patchableBody->GetNonTerminatorExpressions()) {
+            auto* call = dynamic_cast<Apply*>(expression);
+            auto* callee = call == nullptr ? nullptr : dynamic_cast<Function*>(call->GetCallee());
+            if (callee != nullptr && callee->GetIdentifierWithoutPrefix() == "is_interpreter_initialized") {
+                auto* readinessBranch = dynamic_cast<Branch*>(patchableBody->GetTerminator());
+                error(readinessBranch != nullptr, "interpreter readiness branch was not found");
+                auto* guardBlock = readinessBranch->GetTrueBlock();
+                readinessBranch->GetFalseBlock()->RemoveSelfFromBlockGroup();
+                patchable->GetBody()->SetEntryBlock(guardBlock);
+                patchableBody->RemoveSelfFromBlockGroup();
+                patchableBody = guardBlock;
+                break;
+            }
+        }
+    }
 
     const auto patchableBlockTerminator = patchableBody->GetTerminator();
     error(patchableBlockTerminator->GetExprKind() == ExprKind::BRANCH, "guard var flag check was not found");

@@ -23,10 +23,37 @@ Patcher::Patcher(CHIRBuilder& builder, const std::shared_ptr<PluginContext>& plu
     const auto guardClassCtor = guardClassMethods.back();
     CJC_ASSERT_WITH_MSG(guardClassCtor->GetFuncKind() == CLASS_CONSTRUCTOR,
         "expected package init guard class to have ctor");
-    genPackageInitGuardChecks(package->GetPackageInitFunc(), guardClassType, guardVar, guardVarFlag,
+    auto* packageInit = package->GetPackageInitFunc();
+    auto* packageLiteralInit = package->GetPackageLiteralInitFunc();
+    genPackageInitGuardChecks(packageInit, guardClassType, guardVar, guardVarFlag,
         guardClassMethods.front(), guardClassCtor);
-    genPackageInitGuardChecks(package->GetPackageLiteralInitFunc(), guardClassType, guardVar, guardVarFlag,
+    genPackageInitGuardChecks(packageLiteralInit, guardClassType, guardVar, guardVarFlag,
         guardClassMethods.at(1), guardClassCtor);
+
+#ifdef IOS_TARGET
+    const std::string name = "is_interpreter_initialized";
+    CJC_ASSERT_WITH_MSG(package->TryGetGlobalFunc("@" + name) == nullptr,
+        "is_interpreter_initialized is reserved for the CBC interpreter");
+    auto* type = builder.GetType<FuncType>(std::vector<Type*>{}, builder.GetBoolTy(), false, true);
+    auto* isInterpreterInitialized = builder.CreateFunction(type, name, name, "", package->GetName());
+    isInterpreterInitialized->EnableAttr(Attribute::IMPORTED);
+    isInterpreterInitialized->EnableAttr(Attribute::FOREIGN);
+    isInterpreterInitialized->EnableAttr(Attribute::PLUGIN_ADDED);
+
+    auto addInterpreterInitializedGuard = [&](Function* initializer) {
+        auto* body = initializer->GetBody();
+        auto* check = builder.CreateBlock(body);
+        auto* skip = builder.CreateBlock(body);
+        auto* interpreterInitialized = CHIR::CreateAndAppendExpression<Apply>(
+            builder, builder.GetBoolTy(), isInterpreterInitialized, FuncCallContext{}, check);
+        CHIR::CreateAndAppendTerminator<Branch>(
+            builder, interpreterInitialized->GetResult(), initializer->GetEntryBlock(), skip, check);
+        CHIR::CreateAndAppendTerminator<Exit>(builder, skip);
+        body->SetEntryBlock(check);
+    };
+    addInterpreterInitializedGuard(packageInit);
+    addInterpreterInitializedGuard(packageLiteralInit);
+#endif
 
     GlobalVar* packageInitFlag = nullptr;
     GlobalVar* packageInitLiteralFlag = nullptr;

@@ -54,7 +54,9 @@ def configure_and_build(args, project_dir, build_dir, definitions, env):
 
 def build_plugin(args):
     env = build_environment(args.cangjie_toolchain_path)
+    ios_package_init = "ON" if args.target_ios else "OFF"
     definitions = [
+        f"-DIOS_TARGET={ios_package_init}",
         f"-DTEST={'ON' if args.run_tests else 'OFF'}",
         f"-DSTUB_TEST={'ON' if args.run_tests == 'stub' else 'OFF'}",
     ]
@@ -130,7 +132,12 @@ def main():
 
     plugin_parser = commands.add_parser("build-plugin", help="Build the C++ compiler plugin")
     add_build_options(plugin_parser)
-    plugin_parser.add_argument("--run-tests", choices=["normal", "stub"])
+    plugin_mode = plugin_parser.add_mutually_exclusive_group()
+    plugin_mode.add_argument("--run-tests", choices=["normal", "stub"])
+    plugin_mode.add_argument(
+        "--target-ios", action="store_true",
+        help="Build the hotfix plugin for iOS app targets",
+    )
 
     patch_parser = commands.add_parser("build-patch-gen", help="Build the CHIR patch generator")
     add_build_options(patch_parser)
